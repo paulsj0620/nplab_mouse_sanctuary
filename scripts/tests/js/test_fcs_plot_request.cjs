@@ -1,0 +1,6 @@
+const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
+const s=fs.readFileSync(process.argv[2]||__dirname+'/../../../static/fcs.js','utf8');const code=s.slice(s.indexOf('async function fcsDrawRequest('),s.indexOf('\nfunction fcsDraw()'));
+function setup(api,timers={setTimeout,clearTimeout}){const els={};const c={api,...timers,fcsRun:{id:'run',status:'done'},fcsGate:0,fcsPlotRequest:0,fcsPlot:null,fcsEl:id=>els[id]??={value:'0'},fcsDraw(){},fwUpdate(){}};vm.createContext(c);vm.runInContext(code,c);return {c,els}}
+test('stale response cannot replace current plot or start editor',async()=>{let resolve;const {c}=setup(()=>new Promise(r=>resolve=r));const pending=c.fcsDrawRequest(true);c.fcsPlotRequest++;resolve({});assert.equal(await pending,false);assert.equal(c.fcsPlot,null)});
+test('timeout ends wait and reports actionable error',async()=>{const {c,els}=setup(()=>new Promise(()=>{}),{setTimeout:fn=>setTimeout(fn,1),clearTimeout});await assert.rejects(c.fcsDrawRequest(true),/timed out/);assert.match(els['fcs-plot-status'].textContent,/try again/)});
+test('successful request marks editor preview ready',async()=>{const plot={x:[]};const {c}=setup(async()=>plot);assert.equal(await c.fcsDrawRequest(true),true);assert.equal(c.fcsPlot,plot)});

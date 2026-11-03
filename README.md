@@ -7,10 +7,10 @@
 - 유선 en0 주소에만 바인딩, 허용 클라이언트 대역 10.92.73.0/24. 다른 대역은 HTTP 403. X-Forwarded-For 등을 신뢰하지 않고 실제 소켓 발신 IP로 판단한다.
 - Wi-Fi en1(192.168.83.99)은 허용하지 않는다. 다른 연구실 PC의 대역이 다르면 그 범위를 확인한 뒤 명시적으로 추가해야 한다. 모든 학교 네트워크를 자동 허용하지 않는다.
 - 현재 HTTP 연결이며 전송 암호화는 없다. HTTPS가 필요하면 내부 인증서 배포를 별도 구성한다.
-- 최종 폴더 .venv에 requirements.txt를 설치했다. com.mouselab.server/backup LaunchAgent를 등록했다. 서버는 caffeinate -is로 시스템 잠자기를 방지하며 로그인 후 자동 실행된다. 재부팅 후 macOS 사용자 로그인이 필요하고 로그아웃/종료 중에는 사용할 수 없다.
+- 최종 폴더 .venv에 requirements/requirements.txt를 설치했다. com.mouselab.server/backup LaunchAgent를 등록했다. 서버는 caffeinate -is로 시스템 잠자기를 방지하며 로그인 후 자동 실행된다. 재부팅 후 macOS 사용자 로그인이 필요하고 로그아웃/종료 중에는 사용할 수 없다.
 - 매일 03:00에 backups/로 SQLite 일관된 백업을 생성한다. SMB로의 복사는 아직 구성하지 않았다.
 - 실행 DB는 이 폴더 data/lab.sqlite이며 이전 8766 작업 DB와 혼동하지 않는다. 사용자에게 위 내부망 주소를 안내한다.
-- 배포 스크립트: deploy/setup-lan.py --host 10.92.73.22 --network 10.92.73.0/24 --install. 이미 등록된 서비스에는 실행을 거부한다. 중지 시 deploy/stop-services.command 사용. 기존 install-services.command는 이전 VPN용이므로 현재 LAN 운영에 사용하지 않는다.
+- 배포 스크립트: -m scripts.deployment.setup_lan --host 10.92.73.22 --network 10.92.73.0/24 --install. 이미 등록된 서비스에는 실행을 거부한다. 중지 시 deploy/stop-services.command 사용. 기존 install-services.command는 이전 VPN용이므로 현재 LAN 운영에 사용하지 않는다.
 - IP 주소가 바뀌면 서비스 바인딩과 접속 주소를 함께 갱신해야 한다. DHCP 예약 여부는 확인하지 않았다.
 - 확인: 유선 소스 IP에서 /api/me 및 최신 Mouse Sanctuary 페이지 HTTP 200, Wi-Fi 소스 IP에서 403, 관리자 초기화 완료, 서버 running 및 백업 예약 등록 확인. 다른 물리 PC에서의 접속은 아직 확인하지 않았다.
 
@@ -27,8 +27,8 @@ macOS에서는 `start.command`를 실행한 다음 브라우저에서 http://127
 
 ```sh
 python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python server.py
+.venv/bin/python -m pip install -r requirements/requirements.txt
+.venv/bin/python -m scripts.app.server
 ```
 
 Windows는 `.venv\Scripts\python.exe`를 사용합니다. Excel 입력에 openpyxl이 필요합니다. CSV는 Python 표준 라이브러리로 처리합니다.
@@ -39,7 +39,7 @@ Windows는 `.venv\Scripts\python.exe`를 사용합니다. Excel 입력에 openpy
 
 1. 먼저 서버 컴퓨터의 localhost에서 관리자 계정을 생성합니다.
 2. 관리자 화면에서 연구자 계정을 추가합니다. 사용자별 로그인으로 수정 작성자를 식별합니다.
-3. 내부 네트워크용 테스트는 `python server.py --host 0.0.0.0 --port 8000`으로 실행한 뒤 연구실의 승인된 네트워크 범위에서 접속합니다. 이 명령은 모든 인터페이스에 열리므로 네트워크 노출 범위는 서버 담당자가 정합니다.
+3. 내부 네트워크용 테스트는 `python -m scripts.app.server --host 0.0.0.0 --port 8000`으로 실행한 뒤 연구실의 승인된 네트워크 범위에서 접속합니다. 이 명령은 모든 인터페이스에 열리므로 네트워크 노출 범위는 서버 담당자가 정합니다.
 4. 실제 공동 운영에서는 HTTPS reverse proxy 뒤에 두고 `--secure-cookie`를 사용하세요. 기본 서버는 내부 파일럿을 위한 표준 라이브러리 HTTP 서버이며 인터넷 공개 운영용 서버가 아닙니다. SSO, 비밀번호 재설정/사용자 비활성화, 연구별 권한 분리는 아직 없습니다.
 5. DB 파일은 서버의 로컬 디스크에 둡니다. 네트워크 공유 폴더에 DB 파일을 두고 각 PC가 직접 여는 방식은 사용하지 않습니다.
 
@@ -86,16 +86,16 @@ p-value는 아래 ANOVA/Tukey 기능으로 자동 계산합니다. 수동 입력
 데이터 화면에서 전체 JSON(같은 DB 스냅샷의 데이터+이력), 측정값 CSV, 업로드 원본을 내려받습니다. 그래프의 데이터 CSV는 현재 필터·제외를 적용합니다. JSON은 검토용으로, 계정과 원본 파일까지 복구하려면 DB 백업을 사용하세요.
 
 ```sh
-python backup.py backups/lab-2026-11-02.sqlite
+python -m scripts.maintenance.backup backups/lab-2026-11-02.sqlite
 ```
 
-백업은 SQLite backup API로 실행하며 기존 파일은 덮어쓰지 않습니다. 복원은 서버를 종료한 뒤 백업 DB를 별도 경로로 복사하고 `server.py --db 복사한파일.sqlite`로 실행합니다. 계정·세션도 포함되므로 백업 접근권한을 제한합니다. 앱 소스와 `seed/` 폴더도 함께 보관합니다.
+백업은 SQLite backup API로 실행하며 기존 파일은 덮어쓰지 않습니다. 복원은 서버를 종료한 뒤 백업 DB를 별도 경로로 복사하고 `python -m scripts.app.server --db 복사한파일.sqlite`로 실행합니다. 계정·세션도 포함되므로 백업 접근권한을 제한합니다. 앱 소스와 `archives/seed/` 폴더도 함께 보관합니다.
 
 ## 검증
 
 ```sh
-python -m unittest -v test_service.py
-node --test test_chart.cjs
+python -m unittest -v scripts.tests.test_service
+node --test scripts/tests/js/test_chart.cjs
 ```
 
 기본 서버 테스트 8개: 신규 개체/동적 항목/0·결측/재시작 후 유지, 원자적 롤백, 동시 수정 충돌, 두 사용자 동시 업로드·소유권, 전역 제외/복원·원본/이력 불변, 인증/역할/공유 서식 충돌, XLSX 행 추적, 유효하지 않은 숫자 차단.
@@ -145,7 +145,7 @@ Gate 이름은 선택 목록, 데이터 화면, 그래프 제목/설명에서 `/
 - 별표 대신 숫자를 표시합니다. 작은 수는 지수 표기를 쓰고, 계산값이 수치 정밀도 한계로 0이 되면 p ≈ 0으로 표시합니다. 수동 p-value 입력은 제거했습니다. 이전 서식의 수동 비교선도 표시하지 않습니다.
 - 샘플 선택 변경 시 이전 p-value를 지우고 새 선택으로 계산합니다. 데이터 revision이 맞지 않으면 결과를 거부합니다. SVG 메타데이터에 분석 방법·라이브러리 버전·전체 그룹별 mouse ID·보정 p·원본 데이터 해시·revision·미저장 선택을 포함합니다. 통계 결과 CSV는 반올림 전 p-value를 내보냅니다.
 - 그래프 상단의 공통 그룹 설정에서 색상을 바꾸면 같은 Diet의 모든 그래프(숨겨진 카드 포함)에 함께 적용됩니다. 초기 색상은 Chow 검정, Western 분홍, TRF 6:18 청록, TRF 10:14 하늘, ADF 진보라, Reverse 밝은 보라입니다. 그룹의 표시 순서/주차가 달라도 같은 Diet 색상을 사용합니다. 공통 팔레트도 공유 서식에 저장합니다. 공통 설정이 없는 이전 서식은 저장된 색상·기호를 바탕으로 공통 설정으로 변환하며 '그림의 초기 색상'으로 전체 복원할 수 있습니다.
-- 첫 실행에 과학 계산 패키지가 없으면 start.command가 앱 폴더의 .venv에 requirements.txt를 설치합니다(인터넷 필요). 기존 Python 환경을 수정하지 않습니다. 수동 설치는 위 가상환경 설치 절차를 사용합니다.
+- 첫 실행에 과학 계산 패키지가 없으면 start.command가 앱 폴더의 .venv에 requirements/requirements.txt를 설치합니다(인터넷 필요). 기존 Python 환경을 수정하지 않습니다. 수동 설치는 위 가상환경 설치 절차를 사용합니다.
 
 통계 엔진은 SciPy 1.16.3입니다. 구현 기준: [one-way ANOVA](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.f_oneway.html), [Tukey HSD/Kramer](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.tukey_hsd.html). 해석 가능한 분석을 위해 실험 설계에 맞는 그룹과 시점으로 선택하세요.
 
@@ -157,7 +157,7 @@ Gate 이름은 선택 목록, 데이터 화면, 그래프 제목/설명에서 `/
 - Exp/Diet 트리는 초기에는 접혀 있습니다. 검색하면 해당 경로를 펼쳐 찾을 수 있고 검색을 지우면 기존 펼침 상태로 돌아갑니다.
 - 그래프의 N 상세에서 측정값 있음, 결측(NULL), 미측정(해당 관측 행 없음), 전역 제외를 서로 겹치지 않게 구분하고 mouse ID를 표시합니다. 표시 그룹/필터 기준 대상 수는 이 네 범주의 합입니다. 곡선의 개체 수는 같은 mouse를 여러 시점에 중복 계산하지 않습니다.
 - 제공된 Absolute Count는 86마리, Frequency는 88마리(44·45 추가)입니다. MFI 전체에는 n/a 6개가 있으며 해당 gate의 N에만 영향을 줍니다. 그래프 N을 억지로 맞추거나 결측을 0으로 채우지 않습니다.
-- 맥미니 운영 안내는 deploy/맥미니-운영가이드.html입니다. deploy/macmini.py는 자동 실행/일일 백업의 launchd 설정을 생성하며, 생성 자체는 서비스를 등록하거나 외부 접속을 열지 않습니다. install-services.command와 enable-private-access.command는 운영자가 준비한 맥미니에서 실행합니다. 비공개 VPN 연결에는 Tailscale 설치·로그인과 연구자 접속 권한 설정이 필요합니다.
+- 맥미니 운영 안내는 deploy/맥미니-운영가이드.html입니다. -m scripts.deployment.macmini는 자동 실행/일일 백업의 launchd 설정을 생성하며, 생성 자체는 서비스를 등록하거나 외부 접속을 열지 않습니다. install-services.command와 enable-private-access.command는 운영자가 준비한 맥미니에서 실행합니다. 비공개 VPN 연결에는 Tailscale 설치·로그인과 연구자 접속 권한 설정이 필요합니다.
 
 ## 윤곽 기본값, 음수 축과 단위
 
@@ -171,6 +171,6 @@ Gate 이름은 선택 목록, 데이터 화면, 그래프 제목/설명에서 `/
 
 ## Git checkout and local configuration
 
-This repository contains application code, tests and documentation. Research originals, SQLite databases, the real `seed/` roster, backups, logs, virtual environments and machine-specific FCS configuration are intentionally excluded. A Git commit is not a research-data backup.
+This repository contains application code, tests and documentation. Research originals, SQLite databases, the real `archives/seed/` roster, backups, logs, virtual environments and machine-specific FCS configuration are intentionally excluded. A Git commit is not a research-data backup.
 
-For an existing installation, retain its local `data/`, `seed/`, `fcs_access.json` and `fcs_paths.json`. For a new installation, provision an authorized `seed/roster.json` separately before starting the server; this repository does not ship the research roster. Copy `fcs_access.example.json` to `fcs_access.json` and explicitly configure approved QA user IDs. Copy `fcs_paths.example.json` to `fcs_paths.json` and configure approved shared-folder mappings for that machine. Never commit actual account databases or research files.
+For an existing installation, retain its local `data/`, `archives/seed/`, `config/fcs_access.json` and `config/fcs_paths.json`. For a new installation, provision an authorized `archives/seed/roster.json` separately before starting the server; this repository does not ship the research roster. Copy `config/fcs_access.example.json` to `config/fcs_access.json` and explicitly configure approved QA user IDs. Copy `config/fcs_paths.example.json` to `config/fcs_paths.json` and configure approved shared-folder mappings for that machine. Never commit actual account databases or research files.

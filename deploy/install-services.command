@@ -8,7 +8,7 @@ if launchctl print "gui/$LAB_USER_ID/com.mouselab.server" >/dev/null 2>&1; then
   echo '서버 서비스가 이미 설치되어 있습니다. 운영 가이드의 업데이트 절차를 확인하세요.'
   exit 1
 fi
-.venv/bin/python3 deploy/macmini.py prepare --require-setup
+.venv/bin/python3 -m scripts.deployment.macmini prepare --require-setup
 mkdir -p "$LAB_AGENT_DIR"
 install -m 600 "$LAB_APP_DIR/deploy/generated/com.mouselab.server.plist" "$LAB_AGENT_DIR/com.mouselab.server.plist"
 install -m 600 "$LAB_APP_DIR/deploy/generated/com.mouselab.backup.plist" "$LAB_AGENT_DIR/com.mouselab.backup.plist"

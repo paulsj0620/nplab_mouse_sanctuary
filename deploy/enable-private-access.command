@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 cd "$(dirname "$0")/.."
-.venv/bin/python3 deploy/macmini.py check-initialized --port 8767
+.venv/bin/python3 -m scripts.deployment.macmini check-initialized --port 8767
 LAB_TAILSCALE="$(command -v tailscale || true)"
 if [ -z "$LAB_TAILSCALE" ] && [ -x /Applications/Tailscale.app/Contents/MacOS/Tailscale ]; then
   LAB_TAILSCALE=/Applications/Tailscale.app/Contents/MacOS/Tailscale

@@ -13,8 +13,8 @@ seed/
 docs/fcs-audit-*/
 docs/flowjo-interop-validation/
 # Machine-specific access and mount configuration
-fcs_access.json
-fcs_paths.json
+config/fcs_access.json
+config/fcs_paths.json
 deploy/generated/
 deploy/generated-lan/
 .env
@@ -28,3 +28,6 @@ deploy/generated-lan/
 __pycache__/
 *.py[cod]
 .DS_Store
+
+# Archived research originals and initial roster
+archives/

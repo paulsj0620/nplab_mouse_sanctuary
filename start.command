@@ -13,6 +13,6 @@ if ! "$LAB_PYTHON" -c 'import openpyxl, numpy, scipy; assert tuple(map(int, scip
     "$LAB_PYTHON" -m venv .venv || exit 1
   fi
   LAB_PYTHON=.venv/bin/python3
-  "$LAB_PYTHON" -m pip install -r requirements.txt || exit 1
+  "$LAB_PYTHON" -m pip install -r requirements/requirements.txt || exit 1
 fi
-exec "$LAB_PYTHON" server.py
+exec "$LAB_PYTHON" -m scripts.app.server

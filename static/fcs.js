@@ -1,6 +1,7 @@
 'use strict';
 let fcsCatalog={files:[],runs:[]},fcsRun=null,fcsGate=-1,fcsPlot=null,fcsBusy=false,fcsPlotRequest=0,fcsRunRequest=0,fcsScreenPoints=[];
 function fcsTreeOrder(gates,parent=-1){return gates.filter(g=>g.parent_index===parent).flatMap(g=>[g,...fcsTreeOrder(gates,g.index)])}
+function fcsRunLabel(r){let spec={};try{spec=JSON.parse(r.edit_spec||'{}')}catch{}return spec.combine_name?('Combined · '+spec.combine_name):(fcsCatalog.files.find(f=>f.id===r.fcs_id)?.filename||'Sample')}
 const fcsEl=id=>document.getElementById(id);
 function fcsStatus(message){fcsEl('fcs-run-status').textContent=message;fcsEl('fw-analysis-message').textContent=message;}
 async function fcsRefresh(){
@@ -11,7 +12,7 @@ async function fcsRefresh(){
  fcsEl('fcs-library').innerHTML=table(['Original file','Storage','Uploaded by','Uploaded','Size','SHA-256',''],catalog.files.filter(f=>!mine||f.owner===user.id).map(f=>[esc(f.filename),f.storage==='smb'?'SMB original (linked)':'Local copy',esc(f.username),esc(new Date(f.created_at).toLocaleString('en-GB')),(f.size/1024/1024).toFixed(1)+' MB',`<span class="fcs-hash">${esc(f.sha256)}</span>`,`<a class="button" href="/api/fcs/source/${f.id}">Download original</a>`]));
  options(fcsEl('fcs-sample'),catalog.files.filter(f=>f.kind==='fcs').map(f=>({value:f.id,label:f.filename+' · '+f.username})),'Select an FCS file');
  options(fcsEl('fcs-workspace'),catalog.files.filter(f=>f.kind==='wsp').map(f=>({value:f.id,label:f.filename})),'Acquisition channels only');
- options(fcsEl('fcs-runs'),catalog.runs.map(r=>({value:r.id,label:(catalog.files.find(f=>f.id===r.fcs_id)?.filename||'Sample')+' · '+r.status+' · '+new Date(r.created_at).toLocaleString('en-GB')+' · '+r.username})),'Select an analysis',selectedRun);
+ options(fcsEl('fcs-runs'),catalog.runs.map(r=>({value:r.id,label:fcsRunLabel(r)+' · '+r.status+' · '+new Date(r.created_at).toLocaleString('en-GB')+' · '+r.username})),'Select an analysis',selectedRun);
  const reference=fcsEl('fw-reference-workspace').value;
  options(fcsEl('fw-reference-workspace'),catalog.files.filter(f=>f.kind==='wsp').map(f=>({value:f.id,label:f.filename})),'Select a WSP file',reference);
  fwRenderSamples();
@@ -59,8 +60,9 @@ function fwShowRun(r){
  const result=r.result;fcsEl('fcs-results').hidden=false;
  fcsEl('fcs-provenance').textContent=`${result.engine} · ${result.events.toLocaleString('en-GB')} events · ${result.base_channel_count} original channels · Mouse ${r.mouse_id||'not linked'} · ${r.organ} · ${result.space}`;
  fcsEl('fcs-comparison').textContent=r.wsp_id?`${result.gates.length} gates · ${result.gates.filter(g=>g.flowjo_count!==null).length} unchanged gates with FlowJo references · ${result.different_gate_counts} reference counts differ. Review these differences before using recomputed results. WSP internal sample ID: ${result.workspace_sample_id} (${result.workspace_sample_count} samples referenced; only this FCS analyzed).`:'No workspace attached. Acquisition coordinates are used; no WSP compensation or transforms are applied.';
- fcsEl('fcs-notes').innerHTML=result.notes.map(n=>'<li>'+esc(n)+'</li>').join('')+`<li>FCS SHA-256: ${esc(result.source_fcs_sha256)}</li><li>WSP SHA-256: ${esc(result.source_wsp_sha256||'None')}</li>`;
- if(result.gate_edit)fcsEl('fcs-comparison').textContent+=' QA edited version. Changed gates and descendants have no FlowJo reference comparison. Based on analysis '+result.gate_edit.base_run+'.';
+ fcsEl('fcs-notes').innerHTML=result.notes.filter(n=>!n.includes('Combined FlowJo WSP export is not supported')).map(n=>'<li>'+esc(n)+'</li>').join('')+`<li>FCS SHA-256: ${esc(result.source_fcs_sha256)}</li><li>WSP SHA-256: ${esc(result.source_wsp_sha256||'None')}</li>`;
+ if(result.combined){fcsEl('fcs-comparison').textContent=`Combined: ${result.sources.length} FCS files · common gates from template analysis ${result.template_run}. No single-sample FlowJo count comparison.`;fcsEl('fcs-notes').innerHTML=result.notes.filter(n=>!n.includes('Combined FlowJo WSP export is not supported')).map(n=>'<li>'+esc(n)+'</li>').join('')+result.sources.map(s=>`<li>${esc(s.filename)} · ${s.events.toLocaleString()} events · SHA-256 ${esc(s.sha256)}</li>`).join('')}
+ if(result.gate_edit?.base_run)fcsEl('fcs-comparison').textContent+=' QA edited version. Changed gates and descendants have no FlowJo reference comparison. Based on analysis '+result.gate_edit.base_run+'.';
  const choices=result.channels.map((c,i)=>({value:String(i),label:c.label}));options(fcsEl('fcs-x'),choices,'','0');options(fcsEl('fcs-y'),choices,'','3');
  fwRenderTree();fwUpdate();
  fcsEl('fcs-counts').innerHTML=table(['Gate path','Recomputed events','FlowJo stored events','Difference','% of parent'],result.gates.map(g=>[esc([...g.path.slice(1),g.name].join(' / ')),g.count,g.flowjo_count??'—',g.difference??'—',g.frequency_parent?.toFixed(3)??'—']));
@@ -110,9 +112,9 @@ function fcsDraw(){
  fwSavePlot();
  fcsEl('fcs-plot-status').textContent=`Showing ${p.displayed.toLocaleString()} of ${p.parent_count.toLocaleString()} parent events (maximum 20,000). Gate counts use all events. ${p.space}. ${gate&&!axisMatch?'Gate boundary hidden: choose the gate’s own axes to show it.':''} ${p.nonfinite_in_preview?'Nonfinite preview coordinates omitted: '+p.nonfinite_in_preview:''}`;
 }
-fcsEl('fcs-canvas').onmousemove=e=>{if(!fcsPlot)return;const c=e.currentTarget,r=c.getBoundingClientRect(),x=(e.clientX-r.left)*c.width/r.width,y=(e.clientY-r.top)*c.height/r.height;let best=null,distance=64;for(const point of fcsScreenPoints){const d=(point.x-x)**2+(point.y-y)**2;if(d<distance){best=point;distance=d}}fcsEl('fcs-point').textContent=best?`Original event #${fcsPlot.indices[best.i]+1} · X=${fcsPlot.x[best.i].toPrecision(6)} · Y=${fcsPlot.y[best.i].toPrecision(6)} · ${fcsPlot.hit[best.i]?'Selected population':'Parent only'}`:''};
+fcsEl('fcs-canvas').onmousemove=e=>{if(!fcsPlot)return;const c=e.currentTarget,r=c.getBoundingClientRect(),x=(e.clientX-r.left)*c.width/r.width,y=(e.clientY-r.top)*c.height/r.height;let best=null,distance=64;for(const point of fcsScreenPoints){const d=(point.x-x)**2+(point.y-y)**2;if(d<distance){best=point;distance=d}}fcsEl('fcs-point').textContent=best?`${fcsEventLabel(fcsPlot.indices[best.i])} · X=${fcsPlot.x[best.i].toPrecision(6)} · Y=${fcsPlot.y[best.i].toPrecision(6)} · ${fcsPlot.hit[best.i]?'Selected population':'Parent only'}`:''};
 fcsEl('fcs-png').onclick=()=>{if(!fcsPlot)return;fcsEl('fcs-canvas').toBlob(blob=>{const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='fcs-'+fcsRun.id+'.png';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)})};
-fcsEl('fcs-csv').onclick=()=>{if(!fcsRun?.result)return;const r=fcsRun.result,rows=r.gates.map(g=>({gate_path:[...g.path.slice(1),g.name].join(' / '),count:g.count,flowjo_stored_count:g.flowjo_count,difference:g.difference,frequency_parent:g.frequency_parent,parent_count:g.parent_count,mouse_id:fcsRun.mouse_id,organ:fcsRun.organ,analysis_id:fcsRun.id,engine:r.engine,fcs_sha256:r.source_fcs_sha256,wsp_sha256:r.source_wsp_sha256}));download('fcs-gates-'+fcsRun.id+'.csv',csv(rows,['gate_path','count','flowjo_stored_count','difference','frequency_parent','parent_count','mouse_id','organ','analysis_id','engine','fcs_sha256','wsp_sha256']))};
+fcsEl('fcs-csv').onclick=()=>{if(!fcsRun?.result)return;if(fcsRun.result.combined){const rows=fcsRun.result.gates.flatMap(g=>[{gate:[...g.path.slice(1),g.name].join(' / '),source:'All combined',run_id:fcsRun.id,count:g.count},...(g.source_counts||[]).map(s=>({gate:[...g.path.slice(1),g.name].join(' / '),source:s.filename,run_id:s.run_id,count:s.count}))]);download('combined-gates-'+fcsRun.id+'.csv',csv(rows,['gate','source','run_id','count']));return;}const r=fcsRun.result,rows=r.gates.map(g=>({gate_path:[...g.path.slice(1),g.name].join(' / '),count:g.count,flowjo_stored_count:g.flowjo_count,difference:g.difference,frequency_parent:g.frequency_parent,parent_count:g.parent_count,mouse_id:fcsRun.mouse_id,organ:fcsRun.organ,analysis_id:fcsRun.id,engine:r.engine,fcs_sha256:r.source_fcs_sha256,wsp_sha256:r.source_wsp_sha256}));download('fcs-gates-'+fcsRun.id+'.csv',csv(rows,['gate_path','count','flowjo_stored_count','difference','frequency_parent','parent_count','mouse_id','organ','analysis_id','engine','fcs_sha256','wsp_sha256']))};
 setInterval(async()=>{if(!user?.fcs_access||fcsEl('fcs').hidden||fcsBusy)return;try{if(fcsRun&&['queued','running'].includes(fcsRun.status)){await fcsRefresh();await fcsLoadRun()}}catch(e){fcsStatus(e.message)}},2500);
 
 let fcsDraft=null,fcsView=null,fcsDrag=null,fcsEditStarting=false;
@@ -162,7 +164,7 @@ function fwUpdate(){
  fcsEl('fw-edit-banner').hidden=!fcsDraft;
  fcsEl('fcs-canvas').dataset.editing=String(!!fcsDraft);
  if(fcsDraft)fcsEl('fw-edit-message').textContent=fcsDraft.target>=0?'Editing gate — drag square handles; change its name below.':fcsDraft.kind==='RectangleGate'?'Rectangle ready — drag on the selected plot.':'Polygon ready — click vertices on the selected plot.';
- const r=fcsRun?.status==='done'?fcsRun.result:null,g=r?.gates[fcsGate],file=fcsCatalog.files.find(f=>f.id===fcsRun?.fcs_id);fcsEl('fw-empty').hidden=!!r;fcsEl('fw-sample-title').textContent=file?file.filename:'No sample selected';fcsEl('fw-gate-title').textContent=g?.name||'All events';
+ const r=fcsRun?.status==='done'?fcsRun.result:null,g=r?.gates[fcsGate],file=fcsCatalog.files.find(f=>f.id===fcsRun?.fcs_id);fcsEl('fw-empty').hidden=!!r;fcsEl('fw-sample-title').textContent=r?.combined?r.combined_name:file?file.filename:'No sample selected';fcsEl('fw-gate-title').textContent=g?.name||'All events';
  for(const id of ['fcs-new-rect','fcs-new-poly','fw-parent','fw-root','fcs-png','fcs-csv'])fcsEl(id).disabled=!r||!!fcsDraft;
  fcsEl('fcs-wsp-export').disabled=!r||!fcsRun?.wsp_id||!!fcsDraft||fcsExportBusy;fcsEl('fcs-delete-gate').disabled=!g||!!fcsDraft;fcsEl('fcs-edit-gate').disabled=!g||g.axes.length!==2||!['RectangleGate','PolygonGate'].includes(g.kind)||!!fcsDraft;fcsEl('fw-parent').disabled=!g||!!fcsDraft;
  for(const [id,kind] of [['fcs-new-rect','RectangleGate'],['fcs-new-poly','PolygonGate']])fcsEl(id).setAttribute('aria-pressed',String(fcsDraft?.kind===kind&&fcsDraft.target<0));fcsEl('fcs-edit-gate').setAttribute('aria-pressed',String(!!fcsDraft&&fcsDraft.target>=0));fcsEl('fw-pointer').setAttribute('aria-pressed',String(!fcsDraft));
@@ -187,12 +189,12 @@ fcsEl('fw-export-close').onclick=()=>fcsEl('fw-export-dialog').close();
 fcsEl('fcs-wsp-export').onclick=async()=>{
  if(!fcsRun||fcsDraft||fcsExportBusy)return;
  const run=fcsRun.id;fcsExportBusy=true;fwUpdate();
- fcsEl('fw-export-links').replaceChildren();fcsEl('fw-export-status').textContent='Creating a new WSP and validating its gate geometry…';fcsEl('fw-export-dialog').showModal();
+ fcsEl('fw-export-links').replaceChildren();fcsEl('fw-export-status').textContent='Creating WSP. Combined analyses recheck all events in every original FCS; this may take several minutes…';fcsEl('fw-export-dialog').showModal();
  try{
   const result=await api('/fcs/export','POST',{id:run});
   await fcsRefresh();
   fcsEl('fw-export-status').textContent=result.report.selected_sample+' · '+result.report.gates_verified+' gates verified. Export saved to the original-file library.';
-  fcsEl('fw-export-links').innerHTML='<p><a class="button" href="/api/fcs/source/'+esc(result.file.id)+'">Download FlowJo WSP</a> <a class="button" href="/api/fcs/source/'+esc(result.fcs.id)+'">Download original FCS</a></p>';
+  fcsEl('fw-export-links').innerHTML='<p><a class="button" href="/api/fcs/source/'+esc(result.file.id)+'">Download FlowJo WSP</a></p>'+ (result.sources?.length?result.sources:[result.fcs]).map(f=>'<p><a href="/api/fcs/source/'+esc(f.id)+'">'+esc(f.filename)+'</a></p>').join('');
  }catch(e){fcsEl('fw-export-status').textContent=e.message}
  finally{fcsExportBusy=false;fwUpdate()}
 };
@@ -301,7 +303,7 @@ function fwPlotLayout(){
   card.classList.toggle('active',active);const button=card.firstChild;
   button.textContent=`Plot ${i+1} · ${slot?.plot.gate?.name||'All events'}`;button.setAttribute('aria-pressed',String(active));
   const select=card.children[1];
-  const choices=fcsCatalog.runs.filter(r=>r.status==='done').map(r=>({value:r.id,label:(fcsCatalog.files.find(f=>f.id===r.fcs_id)?.filename||'Sample')+' · '+new Date(r.created_at).toLocaleString('en-GB')}));
+  const choices=fcsCatalog.runs.filter(r=>r.status==='done').map(r=>({value:r.id,label:fcsRunLabel(r)+' · '+new Date(r.created_at).toLocaleString('en-GB')}));
   options(select,choices,'Choose completed analysis',slot?.run?.id||'');select.disabled=!!fcsDraft;
   const body=card.lastChild,node=active?canvas:slot?.image;
   if(node&&body.firstChild!==node)body.replaceChildren(node);
@@ -351,4 +353,19 @@ fcsEl('fcs-delete-confirm').onclick=async()=>{
  button.disabled=true;
  try{const r=await api('/fcs/edit','POST',{base_run:context.run,reason,change:{operation:'delete',target:context.target}});fcsEl('fcs-delete-dialog').close();await fcsRefresh();fcsEl('fcs-runs').value=r.id;await fcsLoadRun()}
  catch(e){fcsEl('fcs-delete-error').textContent=e.message}finally{button.disabled=false}
+};
+
+function fcsEventLabel(index){const source=(fcsPlot.sources||[]).find(s=>index>=s.start&&index<s.stop);return source?`${source.filename} · Original event #${index-source.start+1}`:`Original event #${index+1}`}
+fcsEl('fcs-combine-open').onclick=async()=>{
+ if(fcsDraft){fcsStatus('Save or cancel the gate edit first.');return}
+ try{await fcsRefresh();const runs=fcsCatalog.runs.filter(r=>r.status==='done'&&!JSON.parse(r.edit_spec||'{}').combine_runs);
+ options(fcsEl('fcs-combine-template'),runs.map(r=>({value:r.id,label:fcsRunLabel(r)+' · '+new Date(r.created_at).toLocaleString('en-GB')})),'Select template');
+ fcsEl('fcs-combine-list').innerHTML=runs.map(r=>`<label class="inline"><input type="checkbox" value="${esc(r.id)}">${esc(fcsRunLabel(r))} · ${esc(new Date(r.created_at).toLocaleString('en-GB'))}</label>`).join('');
+ fcsEl('fcs-combine-error').textContent='';fcsEl('fcs-combine-dialog').showModal();}catch(e){fcsStatus(e.message)}
+};
+fcsEl('fcs-combine-cancel').onclick=()=>fcsEl('fcs-combine-dialog').close();
+fcsEl('fcs-combine-submit').onclick=async()=>{
+ const template=fcsEl('fcs-combine-template').value,ids=[template,...[...fcsEl('fcs-combine-list').querySelectorAll('input:checked')].map(x=>x.value).filter(x=>x!==template)],button=fcsEl('fcs-combine-submit');
+ if(!template||ids.length<2||ids.length>8){fcsEl('fcs-combine-error').textContent='Choose a template and 1–7 additional analyses.';return}
+ button.disabled=true;try{const r=await api('/fcs/combine','POST',{name:fcsEl('fcs-combine-name').value,run_ids:ids});fcsEl('fcs-combine-dialog').close();await fcsRefresh();fcsEl('fcs-runs').value=r.id;await fcsLoadRun()}catch(e){fcsEl('fcs-combine-error').textContent=e.message}finally{button.disabled=false}
 };

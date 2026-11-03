@@ -154,9 +154,10 @@ async function renderHome(){
  const cards=[['Mice',d.mice.length],['Experiments',new Set(d.mice.map(m=>m.experiment).filter(Boolean)).size],['Metrics',d.metrics.length],['Recorded values',d.measurements.filter(m=>m.value!==null).length]];
  $('#home-summary').innerHTML=cards.map(([label,n])=>`<section class="home-card"><span>${esc(label)}</span><strong class="home-number">${n.toLocaleString()}</strong></section>`).join('');
  $('#home-fcs').hidden=!user.fcs_access;
+ $('#home-recent-fcs').hidden=user.username!=='qa_admin';
  $('#home-files').textContent=user.fcs_access?'Loading…':'FCS Explorer is currently limited to QA accounts.';
  if(user.fcs_access)try{const c=await api('/fcs/library');$('#home-fcs-summary').textContent=`${c.files.filter(f=>f.kind==='fcs').length} FCS files · ${c.runs.filter(r=>r.status==='done').length} completed analyses in recent history`;
- $('#home-files').innerHTML=c.files.slice(0,8).map(f=>`<div class="home-file"><b>${esc(f.filename)}</b><span>${esc(f.username||'')} · ${esc(new Date(f.created_at).toLocaleString('en-GB'))}</span></div>`).join('')||'No FCS files yet.';
+ $('#home-files').innerHTML=user.username!=='qa_admin'?'':c.files.slice(0,8).map(f=>`<div class="home-file"><b>${esc(f.filename)}</b><span>${esc(f.username||'')} · ${esc(new Date(f.created_at).toLocaleString('en-GB'))}</span></div>`).join('')||'No FCS files yet.';
  }catch(e){$('#home-files').textContent=e.message}
 }
 $('#home-refresh').onclick=async()=>{await sync(true);await renderHome()};
