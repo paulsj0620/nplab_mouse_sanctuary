@@ -45,13 +45,18 @@ fcsEl('fcs-analyze').onclick=async()=>{if(fcsBusy)return;fcsEl('fcs-analyze').di
  }catch(e){fcsStatus(e.message)}finally{fcsEl('fcs-analyze').disabled=false}};
 fcsEl('fcs-runs').onchange=()=>fcsLoadRun().catch(e=>fcsStatus(e.message));
 async function fcsLoadRun(){
+ if(fcsDraft){fcsStatus('Save or cancel the gate edit before changing analysis.');return}
  fcsCancelEdit();
- const id=fcsEl('fcs-runs').value,request=++fcsRunRequest;++fcsPlotRequest;fcsEl('fcs-results').hidden=true;fcsRun=null;fcsPlot=null;fwPlotSlots=[];fwActivePlot=0;fwPlotLayout();fwCollapsed.clear();fwRenderTree();fwUpdate();
+ const id=fcsEl('fcs-runs').value,request=++fcsRunRequest;++fcsPlotRequest;fcsEl('fcs-results').hidden=true;fcsRun=null;fcsPlot=null;fwPlotLayout();fwCollapsed.clear();fwRenderTree();fwUpdate();
  if(!id)return;
  const r=await api('/fcs/runs/'+id);if(request!==fcsRunRequest)return;fcsRun=r;fwUpdate();
  fcsStatus(r.status==='done'?'Analysis complete. Original files and existing summary data are unchanged.':r.status==='failed'?r.error:r.status==='running'?'Analyzing all events…':'Queued for analysis…');
  if(r.status!=='done')return;
- const result=r.result;fcsGate=-1;fcsEl('fcs-results').hidden=false;
+ fcsGate=-1;fwShowRun(r);
+ await fcsDrawRequest();
+}
+function fwShowRun(r){
+ const result=r.result;fcsEl('fcs-results').hidden=false;
  fcsEl('fcs-provenance').textContent=`${result.engine} · ${result.events.toLocaleString('en-GB')} events · ${result.base_channel_count} original channels · Mouse ${r.mouse_id||'not linked'} · ${r.organ} · ${result.space}`;
  fcsEl('fcs-comparison').textContent=r.wsp_id?`${result.gates.length} gates · ${result.gates.filter(g=>g.flowjo_count!==null).length} unchanged gates with FlowJo references · ${result.different_gate_counts} reference counts differ. Review these differences before using recomputed results. WSP internal sample ID: ${result.workspace_sample_id} (${result.workspace_sample_count} samples referenced; only this FCS analyzed).`:'No workspace attached. Acquisition coordinates are used; no WSP compensation or transforms are applied.';
  fcsEl('fcs-notes').innerHTML=result.notes.map(n=>'<li>'+esc(n)+'</li>').join('')+`<li>FCS SHA-256: ${esc(result.source_fcs_sha256)}</li><li>WSP SHA-256: ${esc(result.source_wsp_sha256||'None')}</li>`;
@@ -59,11 +64,22 @@ async function fcsLoadRun(){
  const choices=result.channels.map((c,i)=>({value:String(i),label:c.label}));options(fcsEl('fcs-x'),choices,'','0');options(fcsEl('fcs-y'),choices,'','3');
  fwRenderTree();fwUpdate();
  fcsEl('fcs-counts').innerHTML=table(['Gate path','Recomputed events','FlowJo stored events','Difference','% of parent'],result.gates.map(g=>[esc([...g.path.slice(1),g.name].join(' / ')),g.count,g.flowjo_count??'—',g.difference??'—',g.frequency_parent?.toFixed(3)??'—']));
- await fcsDrawRequest();
 }
 fcsEl('fcs-gates').onclick=async e=>{const toggle=e.target.closest('[data-fw-toggle]');if(toggle){const i=Number(toggle.dataset.fwToggle);fwCollapsed.has(i)?fwCollapsed.delete(i):fwCollapsed.add(i);fwRenderTree();return}const button=e.target.closest('[data-fcs-gate]');if(!button||!fcsRun)return;if(fcsDraft){fcsStatus('Save or cancel the gate edit before changing population.');return}fcsGate=Number(button.dataset.fcsGate);const gate=fcsRun.result.gates[fcsGate];document.querySelectorAll('[data-fcs-gate]').forEach(b=>b.classList.toggle('selected',b===button));if(gate){fcsEl('fcs-x').value=String(gate.axes[0]);if(gate.axes.length>1){fcsEl('fcs-y').value=String(gate.axes[1]);if(fcsEl('fcs-mode').value==='histogram')fcsEl('fcs-mode').value='scatter'}else fcsEl('fcs-mode').value='histogram'}try{await fcsDrawRequest()}catch(error){fcsStatus(error.message)}};
 for(const id of ['fcs-x','fcs-y'])fcsEl(id).onchange=()=>fcsDrawRequest().catch(e=>fcsStatus(e.message));fcsEl('fcs-mode').onchange=()=>{if(fcsPlot)fcsDraw()};
-async function fcsDrawRequest(parentOnly=false){if(!fcsRun||fcsRun.status!=='done')return;const request=++fcsPlotRequest;fcsEl('fcs-plot-status').textContent='Preparing plot…';const plot=await api('/fcs/plot','POST',{id:fcsRun.id,gate:fcsGate,parent_only:parentOnly,x:Number(fcsEl('fcs-x').value),y:Number(fcsEl('fcs-y').value)});if(request!==fcsPlotRequest)return;fcsPlot=plot;fcsDraw();fwUpdate()}
+async function fcsDrawRequest(parentOnly=false){
+ if(!fcsRun||fcsRun.status!=='done')return false;
+ const request=++fcsPlotRequest;fcsEl('fcs-plot-status').textContent='Preparing plot…';let timer;
+ try{
+  const plot=await Promise.race([
+   api('/fcs/plot','POST',{id:fcsRun.id,gate:fcsGate,parent_only:parentOnly,x:Number(fcsEl('fcs-x').value),y:Number(fcsEl('fcs-y').value)}),
+   new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Plot preparation timed out. Please try again.')),30000)})
+  ]);
+  if(request!==fcsPlotRequest)return false;
+  fcsPlot=plot;fcsDraw();fwUpdate();return true;
+ }catch(e){if(request===fcsPlotRequest)fcsEl('fcs-plot-status').textContent=e.message;throw e}
+ finally{clearTimeout(timer)}
+}
 function fcsDraw(){
  const p=fcsPlot,canvas=fcsEl('fcs-canvas'),ctx=canvas.getContext('2d'),W=canvas.width,H=canvas.height,L=86,R=W-32,T=50,B=H-90,mode=fcsEl('fcs-mode').value,gate=p.gate;
  const xi=Number(fcsEl('fcs-x').value),yi=Number(fcsEl('fcs-y').value);fcsScreenPoints=[];ctx.clearRect(0,0,W,H);ctx.fillStyle='white';ctx.fillRect(0,0,W,H);
@@ -99,26 +115,30 @@ fcsEl('fcs-png').onclick=()=>{if(!fcsPlot)return;fcsEl('fcs-canvas').toBlob(blob
 fcsEl('fcs-csv').onclick=()=>{if(!fcsRun?.result)return;const r=fcsRun.result,rows=r.gates.map(g=>({gate_path:[...g.path.slice(1),g.name].join(' / '),count:g.count,flowjo_stored_count:g.flowjo_count,difference:g.difference,frequency_parent:g.frequency_parent,parent_count:g.parent_count,mouse_id:fcsRun.mouse_id,organ:fcsRun.organ,analysis_id:fcsRun.id,engine:r.engine,fcs_sha256:r.source_fcs_sha256,wsp_sha256:r.source_wsp_sha256}));download('fcs-gates-'+fcsRun.id+'.csv',csv(rows,['gate_path','count','flowjo_stored_count','difference','frequency_parent','parent_count','mouse_id','organ','analysis_id','engine','fcs_sha256','wsp_sha256']))};
 setInterval(async()=>{if(!user?.fcs_access||fcsEl('fcs').hidden||fcsBusy)return;try{if(fcsRun&&['queued','running'].includes(fcsRun.status)){await fcsRefresh();await fcsLoadRun()}}catch(e){fcsStatus(e.message)}},2500);
 
-let fcsDraft=null,fcsView=null,fcsDrag=null;
+let fcsDraft=null,fcsView=null,fcsDrag=null,fcsEditStarting=false;
 function fcsCancelEdit(){fcsDraft=null;fcsDrag=null;fcsEl('fcs-edit-panel').hidden=true;fcsEl('fcs-cancel-edit').hidden=true;for(const id of ['fcs-x','fcs-y','fcs-mode','fcs-runs'])fcsEl(id).disabled=false;if(fcsPlot)fcsDraw();fwUpdate()}
 function fcsPaintDraft(){if(!fcsDraft||!fcsView)return;const ctx=fcsEl('fcs-canvas').getContext('2d'),v=fcsDraft.vertices,{X,Y}=fcsView;ctx.save();ctx.strokeStyle='#1463ad';ctx.fillStyle='#1463ad';ctx.lineWidth=2;ctx.setLineDash([]);if(v.length){ctx.beginPath();v.forEach((p,i)=>i?ctx.lineTo(X(p[0]),Y(p[1])):ctx.moveTo(X(p[0]),Y(p[1])));if(v.length>=3)ctx.closePath();ctx.stroke();for(const p of v){ctx.fillRect(X(p[0])-4,Y(p[1])-4,8,8)}}ctx.restore()}
 async function fcsBeginEdit(kind,editing=false){
  if(!fcsRun||fcsRun.status!=='done')return;
- if(fcsDraft){fcsStatus('Save or cancel the current gate edit first.');return}
+ if(fcsDraft||fcsEditStarting){fcsStatus('Finish the current gate operation first.');return}
  const selected=fcsRun.result.gates[fcsGate];
  if(editing&&(!selected||selected.axes.length!==2)){fcsStatus('Select a 2D gate to edit.');return}
  fcsCancelEdit();
  if(editing){kind=selected.kind;fcsEl('fcs-x').value=selected.axes[0];fcsEl('fcs-y').value=selected.axes[1]}
  const axes=[Number(fcsEl('fcs-x').value),Number(fcsEl('fcs-y').value)];if(axes[0]===axes[1]){fcsStatus('Select two different axes.');return}
  fcsEl('fcs-mode').value='scatter';
- await fcsDrawRequest(!editing);
+ const context={run:fcsRun.id,gate:fcsGate,slot:fwActivePlot};
+ fcsEditStarting=true;fcsStatus('Preparing gate editor…');
+ let ready;
+ try{ready=await fcsDrawRequest(!editing)}finally{fcsEditStarting=false}
+ if(!ready||fcsRun?.id!==context.run||fcsGate!==context.gate||fwActivePlot!==context.slot)return;
  let vertices=[];
  if(editing){if(kind==='PolygonGate')vertices=selected.vertices.map(v=>[...v]);else{const b=selected.bounds;if(b.flat().some(x=>x===null)){fcsStatus('This gate has an open boundary. Draw a new finite rectangle instead.');return}vertices=[[b[0][0],b[1][0]],[b[0][1],b[1][0]],[b[0][1],b[1][1]],[b[0][0],b[1][1]]]}}
  fcsDraft={run:fcsRun.id,target:editing?fcsGate:-1,parent_index:editing?selected.parent_index:fcsGate,kind,axes,vertices};
  fcsEl('fcs-gate-name').value=editing?selected.name:'';fcsEl('fcs-edit-reason').value='';fcsEl('fcs-edit-panel').hidden=false;fcsEl('fcs-cancel-edit').hidden=false;
  for(const id of ['fcs-x','fcs-y','fcs-mode','fcs-runs'])fcsEl(id).disabled=true;
  fcsEl('fcs-edit-help').textContent=(kind==='RectangleGate'?'Drag to draw a rectangle; drag its corner handles to resize.':'Click to add vertices; drag square handles to move them. Save closes the polygon.')+' Parent: '+(fcsRun.result.gates[fcsDraft.parent_index]?.name||'All events')+'. All events will be recalculated; this preview is sampled.';
- fcsDraw();fwUpdate();
+ fcsDraw();fwUpdate();fcsStatus('Gate editor ready. Draw on the selected plot; save when finished.');
 }
 fcsEl('fcs-new-rect').onclick=()=>fcsBeginEdit('RectangleGate').catch(e=>fcsStatus(e.message));
 fcsEl('fcs-new-poly').onclick=()=>fcsBeginEdit('PolygonGate').catch(e=>fcsStatus(e.message));
@@ -138,9 +158,13 @@ function fwRenderSamples(){const query=fcsEl('fw-sample-search').value.toLowerCa
 function fwRenderTree(){if(!fcsRun?.result){fcsEl('fcs-gates').innerHTML='<p class="help">Select a completed analysis.</p>';return}const gates=fcsRun.result.gates;function row(g,depth){const children=gates.filter(x=>x.parent_index===g.index),open=!fwCollapsed.has(g.index);return `<div class="fw-tree-row" style="--depth:${depth}"><button class="fw-disclosure" ${children.length?`data-fw-toggle="${g.index}" aria-expanded="${open}" aria-label="${open?'Collapse':'Expand'} ${esc(g.name)}"`:'disabled aria-hidden="true" tabindex="-1"'}>${children.length?(open?'▾':'▸'):'·'}</button><button class="fw-gate ${fcsGate===g.index?'selected':''}" data-fcs-gate="${g.index}" title="${esc([...g.path,g.name].join(' / '))}"><span>${esc(g.name)}</span><span class="fw-gate-count">${g.count.toLocaleString()}<small>${g.frequency_parent===null?'—':g.frequency_parent.toFixed(2)+'%'}</small></span></button></div>${children.length?`<div class="fw-tree-children" ${open?'':'hidden'}>${children.map(c=>row(c,depth+1)).join('')}</div>`:''}`}
  fcsEl('fcs-gates').innerHTML=`<div class="fw-tree-row"><button class="fw-gate ${fcsGate<0?'selected':''}" data-fcs-gate="-1"><span>All events</span><span class="fw-gate-count">${fcsRun.result.events.toLocaleString()}<small>100.00%</small></span></button></div>`+gates.filter(g=>g.parent_index<0).map(g=>row(g,0)).join('')}
 function fwSelectGate(index){if(fcsDraft){fcsStatus('Save or cancel your gate edit first.');return}const g=fcsRun?.result?.gates[index];if(g){let parent=g.parent_index;while(parent>=0){fwCollapsed.delete(parent);parent=fcsRun.result.gates[parent].parent_index}}fwRenderTree();fcsEl('fcs-gates').querySelector(`[data-fcs-gate="${index}"]`)?.click()}
-function fwUpdate(){const r=fcsRun?.status==='done'?fcsRun.result:null,g=r?.gates[fcsGate],file=fcsCatalog.files.find(f=>f.id===fcsRun?.fcs_id);fcsEl('fw-empty').hidden=!!r;fcsEl('fw-sample-title').textContent=file?file.filename:'No sample selected';fcsEl('fw-gate-title').textContent=g?.name||'All events';
+function fwUpdate(){
+ fcsEl('fw-edit-banner').hidden=!fcsDraft;
+ fcsEl('fcs-canvas').dataset.editing=String(!!fcsDraft);
+ if(fcsDraft)fcsEl('fw-edit-message').textContent=fcsDraft.target>=0?'Editing gate — drag square handles; change its name below.':fcsDraft.kind==='RectangleGate'?'Rectangle ready — drag on the selected plot.':'Polygon ready — click vertices on the selected plot.';
+ const r=fcsRun?.status==='done'?fcsRun.result:null,g=r?.gates[fcsGate],file=fcsCatalog.files.find(f=>f.id===fcsRun?.fcs_id);fcsEl('fw-empty').hidden=!!r;fcsEl('fw-sample-title').textContent=file?file.filename:'No sample selected';fcsEl('fw-gate-title').textContent=g?.name||'All events';
  for(const id of ['fcs-new-rect','fcs-new-poly','fw-parent','fw-root','fcs-png','fcs-csv'])fcsEl(id).disabled=!r||!!fcsDraft;
- fcsEl('fcs-wsp-export').disabled=!r||!fcsRun?.wsp_id||!!fcsDraft||fcsExportBusy;fcsEl('fcs-edit-gate').disabled=!g||g.axes.length!==2||!!fcsDraft;fcsEl('fw-parent').disabled=!g||!!fcsDraft;
+ fcsEl('fcs-wsp-export').disabled=!r||!fcsRun?.wsp_id||!!fcsDraft||fcsExportBusy;fcsEl('fcs-delete-gate').disabled=!g||!!fcsDraft;fcsEl('fcs-edit-gate').disabled=!g||g.axes.length!==2||!['RectangleGate','PolygonGate'].includes(g.kind)||!!fcsDraft;fcsEl('fw-parent').disabled=!g||!!fcsDraft;
  for(const [id,kind] of [['fcs-new-rect','RectangleGate'],['fcs-new-poly','PolygonGate']])fcsEl(id).setAttribute('aria-pressed',String(fcsDraft?.kind===kind&&fcsDraft.target<0));fcsEl('fcs-edit-gate').setAttribute('aria-pressed',String(!!fcsDraft&&fcsDraft.target>=0));fcsEl('fw-pointer').setAttribute('aria-pressed',String(!fcsDraft));
  const path=[];let cursor=g;while(cursor){path.unshift(cursor);cursor=r.gates[cursor.parent_index]}
  fcsEl('fw-breadcrumb').innerHTML=r?`<button data-fw-jump="-1">${esc(file?.filename||'All events')}</button>`+path.map(p=>`<span>›</span><button data-fw-jump="${p.index}">${esc(p.name)}</button>`).join(''):'Select a sample';
@@ -245,7 +269,7 @@ function fwSavePlot(){
  if(!fcsPlot)return;
  const canvas=fcsEl('fcs-canvas');
  const slot=fwPlotSlots[fwActivePlot]||{};
- Object.assign(slot,{plot:fcsPlot,gate:fcsGate,x:fcsEl('fcs-x').value,y:fcsEl('fcs-y').value,mode:fcsEl('fcs-mode').value});
+ Object.assign(slot,{run:fcsRun,plot:fcsPlot,gate:fcsGate,x:fcsEl('fcs-x').value,y:fcsEl('fcs-y').value,mode:fcsEl('fcs-mode').value});
  if(!slot.image){slot.image=document.createElement('canvas');slot.image.width=canvas.width;slot.image.height=canvas.height}
  slot.image.getContext('2d').drawImage(canvas,0,0);fwPlotSlots[fwActivePlot]=slot;
  // Initialize additional views from the first plot. Subsequent changes are independent.
@@ -258,13 +282,16 @@ function fwSavePlot(){
 }
 function fwPlotLayout(){
  const row=fcsEl('fw-plot-row'),canvas=fcsEl('fcs-canvas'),count=Number(fcsEl('fw-plot-count').value);
- row.style.setProperty('--plot-count',count);
+ row.style.setProperty('--plot-count',Math.min(count,4));
  // Keep the live canvas attached while drawing to preserve pointer capture.
  if(row.children.length!==count||!row.querySelector('[data-plot-card]')){
   const fragment=document.createDocumentFragment();
   for(let i=0;i<count;i++){
    const card=document.createElement('section');card.dataset.plotCard=i;
    const button=document.createElement('button');button.type='button';button.onclick=()=>fwSelectPlot(i);card.append(button);
+   const select=document.createElement('select');select.setAttribute('aria-label','Plot '+(i+1)+' analysis');
+   select.onchange=async()=>{if(fcsDraft){fwPlotLayout();fcsStatus('Save or cancel the gate edit first.');return}const runId=select.value;if(!runId){fwPlotLayout();return}fwSelectPlot(i);fcsEl('fcs-runs').value=runId;try{await fcsLoadRun()}catch(e){fcsStatus(e.message)}};
+   card.append(select);
    const body=document.createElement('div');body.className='fw-plot-body';card.append(body);fragment.append(card);
   }
   row.replaceChildren(fragment);
@@ -273,19 +300,22 @@ function fwPlotLayout(){
   const card=row.children[i],slot=fwPlotSlots[i],active=i===fwActivePlot;
   card.classList.toggle('active',active);const button=card.firstChild;
   button.textContent=`Plot ${i+1} · ${slot?.plot.gate?.name||'All events'}`;button.setAttribute('aria-pressed',String(active));
+  const select=card.children[1];
+  const choices=fcsCatalog.runs.filter(r=>r.status==='done').map(r=>({value:r.id,label:(fcsCatalog.files.find(f=>f.id===r.fcs_id)?.filename||'Sample')+' · '+new Date(r.created_at).toLocaleString('en-GB')}));
+  options(select,choices,'Choose completed analysis',slot?.run?.id||'');select.disabled=!!fcsDraft;
   const body=card.lastChild,node=active?canvas:slot?.image;
   if(node&&body.firstChild!==node)body.replaceChildren(node);
-  body.onclick=()=>{if(!active)fwSelectPlot(i)};
+  body.onclick=()=>{if(fcsDraft)return;fwSelectPlot(i);fwZoomPlot(true)};
  }
  fcsEl('fw-active-plot').textContent='Selected: Plot '+(fwActivePlot+1);
 }
 function fwSelectPlot(index){
  if(index===fwActivePlot)return;
  if(fcsDraft){fcsStatus('Save or cancel the gate edit before selecting another plot.');return}
- ++fcsPlotRequest;fwActivePlot=index;
+ ++fcsPlotRequest;++fcsRunRequest;fwActivePlot=index;
  const slot=fwPlotSlots[index];
  if(!slot){fwPlotLayout();return}
- fcsGate=slot.gate;fcsPlot=slot.plot;
+ fcsRun=slot.run;fcsGate=slot.gate;fcsPlot=slot.plot;fcsEl('fcs-runs').value=fcsRun.id;fwCollapsed.clear();fwShowRun(fcsRun);
  fcsEl('fcs-x').value=slot.x;fcsEl('fcs-y').value=slot.y;fcsEl('fcs-mode').value=slot.mode;
  fwPlotLayout();fcsDraw();fwRenderTree();fwUpdate();
 }
@@ -295,3 +325,30 @@ fcsEl('fw-plot-count').onchange=()=>{
  if(fcsPlot)fwSavePlot();else fwPlotLayout();
 };
 fwPlotLayout();
+
+fcsEl('fw-edit-exit').onclick=()=>{fcsCancelEdit();fcsStatus('Gate edit cancelled.');fcsDrawRequest().catch(e=>fcsStatus(e.message))};
+
+function fwZoomPlot(open){
+ fcsEl('fcs-results').classList.toggle('fw-zoom',open);
+ fcsEl('fw-zoom-close').hidden=!open;
+}
+fcsEl('fw-zoom-close').onclick=()=>fwZoomPlot(false);
+document.addEventListener('keydown',e=>{if(e.key==='Escape')fwZoomPlot(false)});
+
+let fcsDeleteContext=null;
+fcsEl('fcs-delete-gate').onclick=()=>{
+ if(fcsDraft||!fcsRun?.result||fcsGate<0)return;
+ const gates=fcsRun.result.gates,removed=new Set([fcsGate]);let size;
+ do{size=removed.size;gates.forEach((g,i)=>{if(removed.has(g.parent_index))removed.add(i)})}while(size!==removed.size);
+ fcsDeleteContext={run:fcsRun.id,target:fcsGate};
+ fcsEl('fcs-delete-description').textContent=`Remove “${gates[fcsGate].name}” and ${removed.size-1} descendant gates from a new analysis version?`;
+ fcsEl('fcs-delete-reason').value='';fcsEl('fcs-delete-error').textContent='';fcsEl('fcs-delete-dialog').showModal();
+};
+fcsEl('fcs-delete-cancel').onclick=()=>fcsEl('fcs-delete-dialog').close();
+fcsEl('fcs-delete-confirm').onclick=async()=>{
+ const button=fcsEl('fcs-delete-confirm'),context=fcsDeleteContext,reason=fcsEl('fcs-delete-reason').value.trim();
+ if(!context||!reason){fcsEl('fcs-delete-error').textContent='Enter a reason.';return}
+ button.disabled=true;
+ try{const r=await api('/fcs/edit','POST',{base_run:context.run,reason,change:{operation:'delete',target:context.target}});fcsEl('fcs-delete-dialog').close();await fcsRefresh();fcsEl('fcs-runs').value=r.id;await fcsLoadRun()}
+ catch(e){fcsEl('fcs-delete-error').textContent=e.message}finally{button.disabled=false}
+};

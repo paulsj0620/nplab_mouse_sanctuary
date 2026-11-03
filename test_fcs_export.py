@@ -35,7 +35,7 @@ class ExportTests(unittest.TestCase):
   result=copy.deepcopy(self.result);g=result['gates'][0];g.update(name='Renamed',bounds=[[.2,.6],[.3,.7]],edited=True)
   child=dict(index=1,name='Child',parent_index=0,path=['root','Renamed'],kind='PolygonGate',axes=[0,1],bounds=[[None,None],[None,None]],vertices=[[.3,.4],[.5,.4],[.4,.6]],complement=False,edited=True)
   result['gates'].append(child)
-  report,doc,strategy=self.export(result,[{'target':0},{'target':-1}])
+  report,doc,strategy=self.export(result,[{'target':0},{'target':-1,'parent_index':0}])
   self.assertEqual(report['gates_verified'],2)
   self.assertEqual(strategy.get_gate('Renamed',('root',),sample_id='sample.fcs').dimensions[0].min,.2)
   self.assertEqual(E.tostring(doc.find('.//Transformations')),E.tostring(E.parse(str(self.source)).find('.//Transformations')))
@@ -49,3 +49,15 @@ class ExportTests(unittest.TestCase):
  def test_unedited_geometry_kept_verbatim(self):
   _,doc,_=self.export(self.result,[])
   self.assertEqual(E.tostring(doc.find('.//Gate')),E.tostring(E.parse(str(self.source)).find('.//Gate')))
+
+ def test_delete_original_then_add_new(self):
+  result=copy.deepcopy(self.result)
+  result['gates'][0].update(name='Replacement',edited=True)
+  report,doc,strategy=self.export(result,[{'operation':'delete','target':0},{'target':-1,'parent_index':-1}])
+  self.assertEqual(report['gates_verified'],1)
+  self.assertEqual([p.get('name') for p in doc.findall('.//Population')],['Replacement'])
+ def test_delete_all(self):
+  result=copy.deepcopy(self.result);result['gates']=[]
+  report,doc,strategy=self.export(result,[{'operation':'delete','target':0}])
+  self.assertEqual(report['gates_verified'],0)
+  self.assertEqual(doc.findall('.//Population'),[])

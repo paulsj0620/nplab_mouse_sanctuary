@@ -5,6 +5,10 @@ def validate_edit(change,result):
  if not isinstance(change,dict):raise ValueError('Provide a gate change.')
  g=copy.deepcopy(change);gates=result['gates'];target=g.get('target',-1)
  if type(target) is not int or target not in range(-1,len(gates)):raise ValueError('Invalid target gate.')
+ if g.get('operation')=='delete':
+  if target<0:raise ValueError('Select a gate to delete.')
+  return {'operation':'delete','target':target}
+ if g.get('operation') not in (None,'edit'):raise ValueError('Unknown gate operation.')
  parent=gates[target]['parent_index'] if target>=0 else g.get('parent_index',-1)
  if type(parent) is not int or parent not in range(-1,len(gates)):raise ValueError('Invalid parent gate.')
  name=g.get('name','').strip()
@@ -40,6 +44,16 @@ def apply_edits(gates,events,masks,changes,channels):
  gates=copy.deepcopy(gates);masks=[m.copy() for m in masks]
  for change in changes:
   g=validate_edit(change,{'gates':gates,'channels':channels,'events':len(events)})
+  if g.get('operation')=='delete':
+   removed={g['target']}
+   while True:
+    more={i for i,x in enumerate(gates) if x['parent_index'] in removed}
+    if more<=removed:break
+    removed|=more
+   keep=[i for i in range(len(gates)) if i not in removed];mapping={old:new for new,old in enumerate(keep)}
+   gates=[gates[i] for i in keep];masks=[masks[i] for i in keep]
+   for i,x in enumerate(gates):x.update(index=i,parent_index=mapping.get(x['parent_index'],-1))
+   continue
   idx=g.pop('target');idx=len(gates) if idx<0 else idx;g['index']=idx
   if idx==len(gates):gates.append(g);masks.append(np.zeros(len(events),bool))
   else:gates[idx].update(g)
@@ -67,4 +81,4 @@ def apply_edits(gates,events,masks,changes,channels):
    gate.update(count=count,parent_count=pc,frequency_parent=100*count/pc if pc else None,flowjo_count=None,difference=None,edited=True)
    done.add(i)
   for i in sorted(affected):evaluate(i)
- return gates,np.asarray(masks,dtype=bool)
+ return gates,np.asarray(masks,dtype=bool).reshape((len(gates),len(events)))

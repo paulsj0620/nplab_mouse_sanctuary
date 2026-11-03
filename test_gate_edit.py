@@ -15,3 +15,14 @@ class GateTests(unittest.TestCase):
   for bounds in ([[0,0],[1,2]],[[0,float('nan')],[1,2]]):
    with self.assertRaises(ValueError):validate_edit(dict(name='A',kind='RectangleGate',axes=[0,1],bounds=bounds),r)
   with self.assertRaises(ValueError):validate_edit(dict(name='A',kind='PolygonGate',axes=[0,1],vertices=[[0,0],[1,1],[2,2]]),r)
+ def test_delete_subtree_remaps_and_allows_later_edit(self):
+  events=np.array([[0,0],[1,1],[2,2]],float)
+  gates=[dict(index=i,name=n,parent_index=p,path=['root'] if p<0 else ['root','A'],kind='RectangleGate',axes=[0,1],bounds=[[0,3],[0,3]],vertices=None,complement=False) for i,(n,p) in enumerate([('A',-1),('Child',0),('B',-1)])]
+  masks=np.ones((3,3),bool)
+  edit=dict(target=0,name='B edited',kind='RectangleGate',axes=[0,1],bounds=[[0,1.5],[0,1.5]])
+  g,m=apply_edits(gates,events,masks,[{'operation':'delete','target':0},edit],[{},{}])
+  self.assertEqual(len(g),1);self.assertEqual(g[0]['index'],0);self.assertEqual(g[0]['parent_index'],-1);self.assertEqual(g[0]['count'],2)
+  self.assertEqual(len(gates),3);self.assertEqual(masks.sum(),9)
+  g,m=apply_edits(gates,events,masks,[{'operation':'delete','target':0},{'operation':'delete','target':0}],[{},{}])
+  self.assertEqual(m.shape,(0,3));self.assertEqual(g,[])
+  with self.assertRaises(ValueError):validate_edit({'operation':'delete','target':-1},{'gates':gates})

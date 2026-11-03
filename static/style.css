@@ -40,3 +40,19 @@
 #fcs .fw-inspector{border-left:0;border-top:1px solid #ccc;max-height:300px}
 #fcs .fw-y-axis,#fcs .fw-x-axis{max-width:360px;margin:6px 0}
 #fw-active-plot{font-weight:bold;white-space:nowrap}
+
+#fcs button:disabled{cursor:default}
+#fw-edit-banner{border:1px solid #777;padding:10px;margin:8px 0;background:#fff;font-weight:bold;display:flex;align-items:center;justify-content:space-between;gap:12px}
+#fcs #fw-plot-row #fcs-canvas[data-editing="true"]{cursor:crosshair}
+
+#fw-plot-row{grid-template-columns:repeat(var(--plot-count,4),minmax(210px,1fr))}
+#fw-plot-row section>select{width:100%;min-width:0;border:0;border-bottom:1px solid #ddd;border-radius:0}
+#fcs #fcs-results.fw-zoom{position:fixed;inset:80px 24px 20px;z-index:50;background:white;border:1px solid #aaa;box-shadow:0 8px 30px #0003;overflow:auto}
+#fcs-results.fw-zoom #fw-plot-row{display:block}
+#fcs-results.fw-zoom #fw-plot-row section:not(.active){display:none}
+#fcs-results.fw-zoom #fw-plot-row section.active{max-width:1000px;margin:auto}
+#fcs-results.fw-zoom #fw-plot-row canvas,#fcs #fcs-results.fw-zoom #fw-plot-row #fcs-canvas{width:100%;max-width:calc(65vh * 900 / 620);height:auto;max-height:none;margin:auto}
+
+.home-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin:20px 0}.home-card{border:1px solid #ddd;padding:24px;background:white}.home-card h3{margin-top:0}.home-number{display:block;font-size:32px;margin-top:12px}.home-file{display:flex;justify-content:space-between;gap:20px;padding:14px 0;border-bottom:1px solid #eee}.home-file span{color:#777}#fcs-delete-error{color:#a22}
+
+.home-actions{grid-template-columns:repeat(2,minmax(0,1fr))}

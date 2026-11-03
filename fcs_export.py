@@ -62,15 +62,33 @@ def export_workspace(spec):
     for descriptor, channel in zip(axes, info['channels']):
         if descriptor[0] != channel['name'].replace('/', '_'):
             raise ValueError('Analysis axis identity mismatch.')
-    final = info['gates']; changed = set(); size = len(ids)
+    final = info['gates']
+    lineage = [{'node':pop,'parent':ids.index((path[-1],path[:-1])) if len(path)>1 else -1,'changed':False} for pop,(_,path) in zip(nodes,ids)]
     for change in (spec.get('edit_spec') or {}).get('changes', []):
         target = change['target']
-        if target < 0: target = size; size += 1
-        changed.add(target)
-    if size != len(final): raise ValueError('Gate edit lineage does not match analysis.')
+        if change.get('operation') == 'delete':
+            removed = {target}
+            while True:
+                more = {i for i,x in enumerate(lineage) if x['parent'] in removed}
+                if more <= removed: break
+                removed |= more
+            for i in removed:
+                pop = lineage[i]['node']
+                if pop is not None and pop.getparent() is not None: pop.getparent().remove(pop)
+            keep = [i for i in range(len(lineage)) if i not in removed]
+            mapping = {old:new for new,old in enumerate(keep)}
+            lineage = [lineage[i] for i in keep]
+            for x in lineage: x['parent'] = mapping.get(x['parent'],-1)
+        elif target < 0:
+            lineage.append({'node':None,'parent':change['parent_index'],'changed':True})
+        else: lineage[target]['changed'] = True
+    if len(lineage) != len(final): raise ValueError('Gate edit lineage does not match analysis.')
+    nodes = [x['node'] for x in lineage]
+    changed = {i for i,x in enumerate(lineage) if x['changed']}
     used_ids = {e.get(q(G, 'id')) for e in root.iter() if e.get(q(G, 'id'))}
     next_id = 2000000000
-    for i in range(len(ids), len(final)):
+    for i in range(len(final)):
+        if nodes[i] is not None: continue
         gate = final[i]; parent = node if gate['parent_index'] < 0 else nodes[gate['parent_index']]
         sub = parent.find('Subpopulations')
         if sub is None: sub = E.SubElement(parent, 'Subpopulations')
@@ -78,7 +96,7 @@ def export_workspace(spec):
         while 'ID'+str(next_id) in used_ids: next_id += 1
         wrapper = E.SubElement(pop, 'Gate', {q(G, 'id'): 'ID'+str(next_id)})
         used_ids.add('ID'+str(next_id)); next_id += 1
-        nodes.append(pop)
+        nodes[i] = pop
 
     def inverse(value, ref):
         if value is None: return None
