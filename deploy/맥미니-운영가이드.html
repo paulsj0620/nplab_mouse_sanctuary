@@ -1,0 +1,28 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><title>Mouse Lab · 맥미니 운영 가이드</title><style>body{max-width:850px;margin:50px auto;padding:0 25px;font:16px/1.8 Arial,'Apple SD Gothic Neo',sans-serif;color:#222;background:white}h1{font-size:28px}h2{font-size:20px;margin-top:35px}code,pre{font-family:monospace;font-size:13px}pre{padding:16px;background:#f6f6f6;white-space:pre-wrap;overflow-wrap:anywhere}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:10px;text-align:left}a{color:#22558a}.note{border-left:3px solid #555;padding-left:16px}</style>
+<h1>맥미니 한 대로 연구실에서 사용하기</h1>
+<p>구조는 <b>연구자 기기 → 비공개 VPN → HTTPS 주소 → 맥미니 앱 → 맥미니 로컬 DB</b>입니다. 데이터·업로드 원본·변경 이력을 한 대에서 관리하므로 여러 사람이 같은 데이터를 봅니다. 외부 접속에는 연구자 기기에도 Tailscale 앱과 승인된 로그인이 필요합니다.</p>
+<p class="note">현재 제공 파일은 실행·자동 시작·백업 설정을 준비한 상태입니다. 이 작업으로 Tailscale 설치/로그인이나 외부 접속을 활성화하지 않았습니다. 맥미니에서 아래 절차를 진행한 뒤 연구자 기기로 접속을 확인해야 합니다.</p>
+<h2>1. 앱 설치와 계정 준비</h2>
+<ol><li>실행 패키지를 맥미니의 계속 유지할 폴더에 풉니다. 실행 중인 폴더는 옮기지 않습니다.</li><li><code>start.command</code>를 실행합니다. 첫 실행에는 Python 3.11 이상이 필요하고, 앱 폴더의 가상환경에 계산 라이브러리를 설치합니다.</li><li>맥미니의 브라우저에서 <code>http://127.0.0.1:8000</code>에 접속해 관리자 계정을 만들고 사용자 관리에서 연구자별 계정을 추가합니다. 공유 비밀번호 대신 개별 계정을 사용하면 수정 작성자를 구분할 수 있습니다.</li><li>실제 명단과 측정값을 Import하고 로그인·수정·제외·내보내기를 확인합니다. 현재 검토 중인 DB를 옮길 때는 아래 백업 절차로 만든 사본을 사용하세요. 데모용 계정과 QA 샘플이 포함되어 있는지는 실제 운영 전에 확인합니다.</li><li>초기 설정이 끝나면 터미널의 Ctrl+C로 임시 실행을 종료합니다.</li></ol>
+<h2>2. 자동 실행과 매일 백업</h2>
+<p><code>deploy/install-services.command</code>를 실행하면 현재 macOS 사용자 계정에 두 서비스를 등록합니다. 앱은 <code>127.0.0.1:8767</code>에서 실행하고, 매일 03:00에 DB 백업을 만듭니다. 이 단계는 외부 접속을 열지 않습니다.</p>
+<table><tr><th>항목</th><th>위치/동작</th></tr><tr><td>운영 DB</td><td><code>data/lab.sqlite</code></td></tr><tr><td>백업</td><td><code>backups/lab-날짜.sqlite</code> · SQLite backup API · 기존 파일 덮어쓰기/자동 삭제 없음</td></tr><tr><td>로그</td><td><code>logs/server.log</code>, <code>logs/server-error.log</code>, <code>logs/backup.log</code></td></tr><tr><td>자동 시작</td><td>macOS 계정 로그인 후 시작. 앱 실행 중 caffeinate로 잠자기를 방지합니다.</td></tr></table>
+<p>LaunchAgent 구성이라 재부팅 후에는 서버 계정에 로그인해야 합니다. 전원 꺼짐이나 인터넷 연결 단절 동안에는 접속할 수 없습니다. 로그인 전 무인 운영이 필요하면 macOS 관리자와 LaunchDaemon·디스크 잠금 해제·Tailscale 무인 실행을 별도로 구성합니다.</p>
+<p>서비스 등록 없이 설정 파일만 검토하려면 앱 폴더의 터미널에서 다음을 실행합니다. 이 명령은 등록/외부 공개를 하지 않습니다.</p>
+<pre>.venv/bin/python3 deploy/macmini.py prepare</pre>
+<h2>3. 집·외부에서 접속하기</h2>
+<ol><li>맥미니에 <a href="https://tailscale.com/docs/concepts/macos-variants">Tailscale 공식 macOS 앱</a>을 설치하고 연구실용 네트워크에 로그인합니다. 운영체제의 네트워크 권한 허용과 로그인은 맥미니 사용자가 진행합니다.</li><li>관리자가 연구자 계정/기기와 맥미니의 HTTPS 서비스에 대한 접속 권한을 승인합니다. 연구자 PC에도 Tailscale을 설치하고 승인된 계정으로 로그인합니다. 소속 기관의 네트워크 사용 기준에 맞게 설정합니다.</li><li>앱 서비스가 실행 중인 상태에서 <code>deploy/enable-private-access.command</code>를 실행합니다. Tailscale이 HTTPS 사용 승인을 요청하면 안내를 따라 사용자가 설정합니다.</li><li>출력되는 <code>https://기기이름.…ts.net</code> 주소를 연구자에게 안내합니다. 이후 앱 로그인과 데이터 업로드는 이 주소에서 진행합니다.</li></ol>
+<p>설정 명령은 다음입니다. <a href="https://tailscale.com/docs/reference/tailscale-cli/serve">Tailscale Serve</a>가 로컬 앱의 포트를 HTTPS로 연결합니다. <a href="https://tailscale.com/docs/features/tailscale-serve">Serve는 비공개 네트워크 내부 공유</a>에 사용합니다.</p>
+<pre>tailscale serve --bg --https=443 http://127.0.0.1:8767
+tailscale serve status</pre>
+<p>앱은 localhost에만 바인딩하고 HTTPS 접속용 Secure 쿠키를 사용합니다. 서비스 등록 후 일반 HTTP 주소에서 새 로그인 쿠키가 유지되지 않는 것은 의도된 설정입니다. 초기 계정 설정은 1단계에서 끝내고, 운영 중에는 HTTPS 주소로 접속합니다.</p>
+<p>이 구성은 연구자용 비공개 접속입니다. VPN 설치 없이 누구나 인터넷에서 접근하는 공개 사이트가 필요하면 별도의 공개 도메인·인증·운영 서버 구성이 필요합니다.</p>
+<h2>4. 백업과 복구</h2>
+<p>수동 백업은 앱 폴더에서 실행합니다.</p><pre>.venv/bin/python3 deploy/macmini.py backup</pre>
+<p>현재 검토 DB를 지정해 사본을 만들 수도 있습니다.</p><pre>.venv/bin/python3 deploy/macmini.py backup --db "/실제/DB/경로.sqlite" --destination "/백업/폴더"</pre>
+<p>백업은 원본 업로드와 감사 이력, 사용자 계정·세션까지 포함합니다. 백업을 별도의 보관 위치에도 복사해 맥미니 자체 장애에 대비하세요. 복구할 때는 서비스를 중지하고 현재 DB 사본을 보관한 다음 복원 사본을 <code>data/lab.sqlite</code>에 배치하고 다시 시작합니다. 실시간 DB 파일을 탐색기에서 단순 복사하는 방식 대신 제공한 백업 명령을 사용합니다.</p>
+<h2>5. 중지·업데이트</h2>
+<p><code>deploy/stop-services.command</code>는 앱과 백업 예약을 중지합니다. 비공개 HTTPS 연결도 중지하려면 다음을 실행합니다.</p><pre>tailscale serve --bg --https=443 off</pre>
+<p>업데이트 순서는 백업 → 서비스 중지 → 앱 코드 교체 → 서비스 등록입니다. <code>data/</code>, <code>backups/</code>는 유지하고 앱 폴더를 이동했다면 설정 파일을 다시 생성합니다. 사용자 계정이 로그인된 상태에서 연구자 기기로 업로드와 최신 그래프가 보이는지 확인합니다.</p>
+<p>현재 앱은 작은 연구실의 비공개 운영을 위한 구성입니다. 여러 사용자의 업로드는 DB 트랜잭션으로 저장하고 동시 수정은 버전 충돌로 보호합니다. 조직용 SSO, 비밀번호 재설정, 연구별 접근권한 분리는 추가 구현 항목입니다.</p>
+</html>

@@ -1,0 +1,30 @@
+# Local data, originals, exports and backups
+data/
+backups/
+logs/
+seed/
+*.sqlite*
+*.db
+*.xls
+*.xlsx
+*.fcs
+*.wsp
+*.flowjo
+docs/fcs-audit-*/
+docs/flowjo-interop-validation/
+# Machine-specific access and mount configuration
+fcs_access.json
+fcs_paths.json
+deploy/generated/
+deploy/generated-lan/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+# Environments and caches
+.venv/
+.fcs-venv/
+__pycache__/
+*.py[cod]
+.DS_Store
