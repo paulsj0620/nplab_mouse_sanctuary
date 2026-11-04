@@ -18,6 +18,8 @@ def prepare(root,output,db,port,require_setup=False):
     base={'WorkingDirectory':str(root),'EnvironmentVariables':{'PYTHONUNBUFFERED':'1'},'Umask':0o077}
     server={**base,'Label':'com.mouselab.server','ProgramArguments':['/usr/bin/caffeinate','-is',str(root/'.venv/bin/python3'),'-m','scripts.app.server','--host','127.0.0.1','--port',str(port),'--db',str(db),'--secure-cookie'],'RunAtLoad':True,'KeepAlive':True,'ThrottleInterval':10,'StandardOutPath':str(logs/'server.log'),'StandardErrorPath':str(logs/'server-error.log')}
     backup={**base,'Label':'com.mouselab.backup','ProgramArguments':[str(root/'.venv/bin/python3'),'-m','scripts.deployment.macmini','backup','--db',str(db),'--destination',str(root/'backups')],'StartCalendarInterval':{'Hour':3,'Minute':0},'StandardOutPath':str(logs/'backup.log'),'StandardErrorPath':str(logs/'backup-error.log')}
+    if (root/'config/backup.json').exists():
+        backup.update(ProgramArguments=[str(root/'.venv/bin/python3'),'-m','scripts.maintenance.smb_backup','run'],StartInterval=3600,RunAtLoad=True)
     for label,config in [('com.mouselab.server',server),('com.mouselab.backup',backup)]:
         path=output/(label+'.plist')
         with path.open('wb') as f:plistlib.dump(config,f)

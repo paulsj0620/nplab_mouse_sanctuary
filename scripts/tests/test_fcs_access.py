@@ -14,7 +14,8 @@ class AccessTests(unittest.TestCase):
     c=http.client.HTTPConnection('127.0.0.1',s.server_port);c.request(method,path,json.dumps(body or {}) if method!='GET' else None,{'Cookie':'lab_session='+token,'X-CSRF-Token':csrf,'Content-Type':'application/json'});r=c.getresponse();result=(r.status,json.loads(r.read()));c.close();return result
    try:
     with patch('scripts.app.server.fcs_allowed',side_effect=lambda u:bool(u) and u['id']==a):
-     for method,path in [('GET','library'),('GET','runs/no'),('GET','transfers/no'),('GET','source/no'),('POST','chunks/no'),('POST','transfers'),('POST','finish'),('POST','plot'),('POST','analyze'),('POST','edit'),('POST','combine'),('POST','export'),('POST','import-reference'),('POST','link-reference'),('GET','workspace-files/no')]:self.assertEqual(req('/api/fcs/'+path,method)[0],403)
+     for method,path in [('GET','library'),('GET','runs/no'),('GET','transfers/no'),('GET','source/no'),('POST','chunks/no'),('POST','transfers'),('POST','finish'),('POST','plot'),('POST','analyze'),('POST','experiment-link'),('POST','edit'),('POST','combine'),('POST','export'),('POST','import-reference'),('POST','link-reference'),('GET','workspace-files/no')]:self.assertEqual(req('/api/fcs/'+path,method)[0],403)
+     self.assertNotIn('available_files',req('/api/experiments?experiment=Exp20')[1])
      self.assertFalse(req('/api/me')[1]['user']['fcs_access']);self.assertTrue(req('/api/me',token=ta)[1]['user']['fcs_access'])
      self.assertEqual(req('/api/fcs/library',token=ta)[0],200)
      self.assertNotIn('fcs_runs',req('/api/export')[1]);self.assertIn('fcs_runs',req('/api/export',token=ta)[1])

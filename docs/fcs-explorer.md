@@ -1,6 +1,6 @@
-# FCS Explorer — initial implementation
+# FACS — initial implementation
 
-Open Mouse Sanctuary → FCS Explorer. This version shares original FCS/WSP files with all signed-in lab members. The My uploads filter is a convenience filter, not a privacy boundary. Original uploader and timestamp are recorded. No public sharing link or external publication has been added.
+Open Mouse Sanctuary → FACS. This version shares original FCS/WSP files with all signed-in lab members. The My uploads filter is a convenience filter, not a privacy boundary. Original uploader and timestamp are recorded. No public sharing link or external publication has been added.
 
 ## Use
 
@@ -53,7 +53,7 @@ The existing daily backup now creates a SQLite snapshot and an adjacent `.assets
 
 ## 2026-11-03 QA gate editor
 
-FCS Explorer is now restricted to stable user IDs [1, 2, 3] (qa_admin, qa_editor, qa_viewer) in config/fcs_access.json. Missing/invalid config denies access. Other administrators do not bypass this restriction; renaming an account cannot grant access. All /api/fcs/* endpoints enforce it before body processing, including chunks/download/plot/edit. Login/me expose fcs_access; UI hides the tab. General export/audit omit FCS catalogue, runs and FCS events for non-QA users. Existing graph/data/import functionality remains available. Do not enable general release without the user's request.
+FACS is now restricted to stable user IDs [1, 2, 3] (qa_admin, qa_editor, qa_viewer) in config/fcs_access.json. Missing/invalid config denies access. Other administrators do not bypass this restriction; renaming an account cannot grant access. All /api/fcs/* endpoints enforce it before body processing, including chunks/download/plot/edit. Login/me expose fcs_access; UI hides the tab. General export/audit omit FCS catalogue, runs and FCS events for non-QA users. Existing graph/data/import functionality remains available. Do not enable general release without the user's request.
 
 Added 2D finite rectangle and polygon drawing and handle dragging. Select a population then New rectangle/New polygon to create a child; select an existing 2D gate then Edit selected gate to modify it. Axes are frozen during editing; Cancel discards only the draft. Enter a gate name and mandatory reason, then Save as new analysis. Each save queues a new immutable run with actor/time/reason/base_run and cumulative geometry changes in fcs_runs.edit_spec. Migration adds this nullable column plus an immutable update trigger. Finished runs and original FCS/WSP bytes remain unchanged. Full-event membership is recalculated for edited gates and descendants using the exact stored coordinate axes and FlowUtils polygon / FlowKit-style rectangle bounds (min inclusive, max exclusive). Child names/paths update after parent rename. Affected FlowJo reference comparisons are cleared; unchanged gates retain theirs. No attempt to fix unresolved FlowJo binning differences. New gates support all available axes; changing compensation/transforms, 1D/open-ended gate editing, deletion, WSP export and batch propagation are not implemented. Self-intersecting polygons and invalid geometry are rejected. Max 100 edits/lineage and existing memory limits remain.
 

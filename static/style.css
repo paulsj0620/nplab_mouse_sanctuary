@@ -56,3 +56,5 @@
 .home-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin:20px 0}.home-card{border:1px solid #ddd;padding:24px;background:white}.home-card h3{margin-top:0}.home-number{display:block;font-size:32px;margin-top:12px}.home-file{display:flex;justify-content:space-between;gap:20px;padding:14px 0;border-bottom:1px solid #eee}.home-file span{color:#777}#fcs-delete-error{color:#a22}
 
 .home-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
+
+.import-tabs{display:flex;gap:4px;border-bottom:1px solid #ccc;margin:0 0 20px}.import-tabs button{border:0;border-radius:0;padding:12px 24px;background:white;color:#666}.import-tabs button[aria-selected="true"]{color:#111;font-weight:700;border-bottom:3px solid #111}#import-kind-help{max-width:1000px;line-height:1.6}#import-validation{margin:18px 0}

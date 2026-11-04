@@ -31,3 +31,5 @@ __pycache__/
 
 # Archived research originals and initial roster
 archives/
+
+config/backup.json

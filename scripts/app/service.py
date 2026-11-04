@@ -29,6 +29,7 @@ class ClosingConnection(sqlite3.Connection):
 
 class Store:
     def __init__(self, path, seed=None):
+        self.import_review_secret=secrets.token_bytes(32)
         self.path=str(path);Path(path).parent.mkdir(parents=True,exist_ok=True)
         with self.db() as c:
             c.executescript('''
@@ -37,6 +38,8 @@ CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user_id INTEGER REFER
 CREATE TABLE IF NOT EXISTS mice(mouse_id TEXT PRIMARY KEY,group_name TEXT NOT NULL,experiment TEXT NOT NULL DEFAULT '',weeks TEXT NOT NULL DEFAULT '',diet TEXT NOT NULL DEFAULT '',note TEXT NOT NULL DEFAULT '',excluded INTEGER NOT NULL DEFAULT 0,version INTEGER NOT NULL DEFAULT 1,source TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS metrics(id INTEGER PRIMARY KEY,identity TEXT UNIQUE NOT NULL,name TEXT NOT NULL,unit TEXT NOT NULL,organ TEXT NOT NULL,gate TEXT NOT NULL,parent_gate TEXT NOT NULL,denominator TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS uploads(id TEXT PRIMARY KEY,filename TEXT NOT NULL,sha256 TEXT NOT NULL,original BLOB NOT NULL,owner INTEGER REFERENCES users(id),created_at TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending',mapping TEXT);
+CREATE TABLE IF NOT EXISTS experiment_files(id INTEGER PRIMARY KEY,file_id TEXT NOT NULL REFERENCES fcs_files(id),experiment TEXT NOT NULL,mouse_id TEXT NOT NULL DEFAULT '',created_by INTEGER NOT NULL REFERENCES users(id),created_at TEXT NOT NULL,UNIQUE(file_id,experiment,mouse_id));
+CREATE TABLE IF NOT EXISTS upload_mice(upload_id TEXT NOT NULL REFERENCES uploads(id),mouse_id TEXT NOT NULL REFERENCES mice(mouse_id),PRIMARY KEY(upload_id,mouse_id));
 CREATE TABLE IF NOT EXISTS measurements(id INTEGER PRIMARY KEY,mouse_id TEXT NOT NULL REFERENCES mice(mouse_id),metric_id INTEGER NOT NULL REFERENCES metrics(id),timepoint TEXT NOT NULL,replicate TEXT NOT NULL,value REAL,missing_reason TEXT NOT NULL DEFAULT '',version INTEGER NOT NULL DEFAULT 1,upload_id TEXT REFERENCES uploads(id),source_row INTEGER,UNIQUE(mouse_id,metric_id,timepoint,replicate));
 CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY,actor INTEGER REFERENCES users(id),action TEXT NOT NULL,entity TEXT NOT NULL,entity_id TEXT NOT NULL,before_json TEXT,after_json TEXT,reason TEXT NOT NULL,created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS presets(id INTEGER PRIMARY KEY,name TEXT UNIQUE NOT NULL,config TEXT NOT NULL,version INTEGER NOT NULL DEFAULT 1,updated_at TEXT NOT NULL);
@@ -194,10 +197,18 @@ CREATE TRIGGER IF NOT EXISTS uploads_no_delete BEFORE DELETE ON uploads BEGIN SE
         if not r:raise Problem('Your upload was not found.',404)
         t=self.read_table(r['filename'],r['original'],sheet)
         return {'upload_id':uid,**t,'rows':t['rows'][:8],'row_count':len(t['rows'])}
-    def commit_import(self,uid,mapping,actor,reason):
+    def review_import(self,uid,mapping,actor):
+        from scripts.imports.validation import review
+        with self.db() as c:return review(self,c,uid,mapping,actor)
+    def commit_import(self,uid,mapping,actor,reason,review_token=None,require_review=False):
         required(reason,'Import reason',2000)
         with self.db() as c:
             c.execute('BEGIN IMMEDIATE')
+            if require_review:
+                from scripts.imports.validation import review
+                report=review(self,c,uid,mapping,actor)
+                if not report['ok']:raise Problem('Import validation failed. Review the file again before saving.',409)
+                if not isinstance(review_token,str) or not secrets.compare_digest(review_token,report['review_token']):raise Problem('Mapping or database changed. Run validation again before saving.',409)
             u=c.execute('SELECT * FROM uploads WHERE id=? AND owner=?',(uid,actor)).fetchone()
             if not u:raise Problem('Your upload was not found.',404)
             if u['status']!='pending':raise Problem('This file has already been imported.',409)
@@ -218,7 +229,9 @@ CREATE TRIGGER IF NOT EXISTS uploads_no_delete BEFORE DELETE ON uploads BEGIN SE
             headers=table['headers'];id_col=mapping.get('id_column');group_col=mapping.get('group_column')
             if id_col not in headers:raise Problem('Select the Mouse ID column.')
             specs=mapping.get('measurements',[])
-            if not specs:raise Problem('Select at least one measurement column.')
+            meta_only=mapping.get('metadata_only') is True
+            if meta_only and (specs or facs):raise Problem('Metadata-only import cannot contain measurements or a FACS table.')
+            if not specs and not meta_only:raise Problem('Select at least one measurement column.')
             if len(specs)>200 or len(specs)*len(table['rows'])>100000:raise Problem('The limit is 200 columns and 100,000 observations per import.')
             metric_specs=[]
             for spec in specs:
@@ -244,12 +257,14 @@ CREATE TRIGGER IF NOT EXISTS uploads_no_delete BEFORE DELETE ON uploads BEGIN SE
                 found=c.execute('SELECT * FROM mice WHERE mouse_id=?',(mouse_id,)).fetchone()
                 group=clean(row.get(group_col))
                 if facs:group=selected_rows[index]['group']
+                if meta_only and not found and not group:group=clean(row.get(mapping.get('diet_column')))
                 if not found:
                     required(group,f'Row {index}: group for new mouse {mouse_id}')
                     m={'mouse_id':mouse_id,'group_name':group,'experiment':clean(row.get(mapping.get('experiment_column'))),'weeks':clean(row.get(mapping.get('weeks_column'))),'diet':clean(row.get(mapping.get('diet_column'))),'note':''}
                     c.execute('INSERT INTO mice(mouse_id,group_name,experiment,weeks,diet,note,source) VALUES(?,?,?,?,?,?,?)',(*m.values(),dump({'upload_id':uid,'row':index})))
                     self.event(c,actor,'create','mouse',mouse_id,None,m,reason);new_mice+=1
                 elif group and group!=found['group_name']:raise Problem(f'Row {index}: group differs from the existing group for {mouse_id}. Change it in the mouse roster editor.',409)
+                c.execute('INSERT OR IGNORE INTO upload_mice(upload_id,mouse_id) VALUES(?,?)',(uid,mouse_id))
                 for spec,meta,mid in metric_specs:
                     tp=clean(row.get(spec.get('time_column'))) if spec.get('time_column') else clean(spec.get('timepoint')) or 'endpoint'
                     if not tp:raise Problem(f'Row {index}: timepoint is blank.')

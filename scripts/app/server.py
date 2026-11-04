@@ -83,6 +83,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(200,self.server.fcs.append(path.rsplit('/',1)[1],user['id'],offset,body))
             d=self.body()
         if self.command=='GET':
+            if path=='/api/experiments':
+                from scripts.app.experiments import workspace
+                return self.respond(200,workspace(store,parse_qs(urlparse(self.path).query).get('experiment',[''])[0],fcs_allowed(user)))
             if path.startswith('/api/fcs/workspace-files/'):return self.respond(200,self.server.fcs.workspace_files(path.rsplit('/',1)[1]))
             if path=='/api/fcs/library':return self.respond(200,self.server.fcs.catalog())
             if path.startswith('/api/fcs/transfers/'):return self.respond(200,self.server.fcs.transfer(path.rsplit('/',1)[1],user['id']))
@@ -120,6 +123,9 @@ class Handler(BaseHTTPRequestHandler):
                 if ext not in ('.xlsx','.xls','.csv'):ext='.bin'
                 return self.respond(200,u['original'],'application/octet-stream',download='source-'+uid+ext)
         if self.command=='POST':
+            if path=='/api/fcs/experiment-link':
+                from scripts.app.experiments import link_file
+                return self.respond(200,link_file(store,d,user['id']))
             if path=='/api/fcs/transfers':return self.respond(201,self.server.fcs.begin(d,user['id']))
             if path=='/api/fcs/finish':return self.respond(200,self.server.fcs.finish(d.get('id'),user['id']))
             if path=='/api/fcs/export':return self.respond(201,self.server.fcs.export_workspace(d.get('id'),user['id']))
@@ -148,7 +154,8 @@ class Handler(BaseHTTPRequestHandler):
             if path=='/api/users':return self.respond(201,store.create_user(d.get('username'),d.get('password'),d.get('role','editor'),user['id']))
             if path=='/api/upload':return self.respond(201,store.stage(d.get('filename'),d.get('content'),user['id']))
             if path=='/api/preview':return self.respond(200,store.preview(d.get('upload_id'),user['id'],d.get('sheet')))
-            if path=='/api/import':return self.respond(201,store.commit_import(d.get('upload_id'),d.get('mapping',{}),user['id'],d.get('reason')))
+            if path=='/api/import/review':return self.respond(200,store.review_import(d.get('upload_id'),d.get('mapping',{}),user['id']))
+            if path=='/api/import':return self.respond(201,store.commit_import(d.get('upload_id'),d.get('mapping',{}),user['id'],d.get('reason'),review_token=d.get('review_token'),require_review=True))
             if path=='/api/presets':return self.respond(200,store.preset(d,user['id']))
         if self.command=='PATCH':
             if path=='/api/account':return self.respond(200,store.rename_user(user['id'],d.get('username'),d.get('expected_username'),user['id']))
