@@ -1,6 +1,6 @@
 """Read-only import review. No measurement, mouse or metric is written."""
 import difflib,hashlib,hmac,json
-from scripts.app.service import Problem,clean,dump,number
+from scripts.app.service import Problem,clean,number,metric_identity
 
 def review(store,c,uid,mapping,actor):
  if not isinstance(mapping,dict):raise Problem('Invalid import mapping.')
@@ -41,7 +41,7 @@ def review(store,c,uid,mapping,actor):
    if facs['needs_statistic']:meta.update(name=clean(mapping.get('facs_statistic')),unit=clean(mapping.get('facs_unit')),denominator='사용자 확인 계산값')
   if not meta['name'] or not meta['unit']:issue('definition',None,spec['column'],'','Metric name and unit are required.')
   if meta['gate'] and not all(meta[k] for k in ('organ','parent_gate','denominator')):issue('definition',None,spec['column'],'','Gate requires organ, parent gate and denominator.')
-  prepared.append((spec,meta,dump(meta)))
+  prepared.append((spec,meta,metric_identity(meta,spec)))
  for n,values in zip(table['source_rows'],table['rows']):
   if facs and n not in selected:continue
   row=dict(zip(headers,values));mouse=selected[n]['mouse_id'] if facs else clean(row[mapping['id_column']]);group=selected[n]['group'] if facs else clean(row.get(mapping.get('group_column')))

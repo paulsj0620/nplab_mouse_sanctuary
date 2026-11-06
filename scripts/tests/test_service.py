@@ -20,6 +20,14 @@ class StoreTests(unittest.TestCase):
         again=Store(self.store.path).snapshot();self.assertEqual([r['value'] for r in again['measurements']],[0,None])
         self.add('id,group,weight\n184,A,99\n',mp=mapping('Custom marker',unit='ng/mL'))
         self.assertEqual(len(self.store.snapshot()['metrics']),2)
+    def test_import_same_gene_in_separate_pathways(self):
+        for pathway in ('Fibrosis', 'Inflammation'):
+            mp=mapping('Gene A',unit='relative expression')
+            mp['measurements'][0].update(organ='Liver',pathway=pathway)
+            self.add('id,group,weight\n184,A,2\n',mp=mp)
+        state=self.store.snapshot()
+        self.assertEqual({json.loads(m['identity'])['pathway'] for m in state['metrics']},{'Fibrosis','Inflammation'})
+        self.assertEqual(len({r['metric_id'] for r in state['measurements']}),2)
     def test_duplicate_rolls_back_new_mouse_metric_and_audit(self):
         self.add('id,group,weight\n184,A,25\n');before=self.store.snapshot();events=len(self.store.audit())
         with self.assertRaises(Problem):self.add('id,group,weight\n185,A,20\n184,A,30\n')
@@ -94,6 +102,7 @@ class StoreTests(unittest.TestCase):
         self.store.preset({'name':'board','config':{'error':'SD','dashboard':{'panels':panels,'count':5,'active':4}}},self.admin)
         saved=self.store.snapshot()['presets'][0]['config']['dashboard']
         self.assertEqual(saved['count'],5);self.assertEqual(saved['panels'],panels)
-        for board in [{'panels':panels,'count':9},{'panels':panels[:3],'count':3},{'panels':panels,'count':4,'active':5}]:
+        self.store.preset({'name':'single','config':{'dashboard':{'panels':panels[:1],'count':1}}},self.admin)
+        for board in [{'panels':panels,'count':9},{'panels':panels,'count':0},{'panels':panels,'count':4,'active':5}]:
             with self.assertRaises(Problem):self.store.preset({'name':'invalid','config':{'dashboard':board}},self.admin)
 if __name__=='__main__':unittest.main()

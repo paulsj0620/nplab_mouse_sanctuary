@@ -1,5 +1,7 @@
 # Mouse Sanctuary — Database ERD
 
+[Graph 측정 항목 분류 ERD와 선택 경로](#graph-metric-erd) · 실험팀 피드백, 2026-11-06
+
 Verified against the running app's SQLite schema on 2026-11-03. Database: `/Users/paul/WorkInProgress/nplab_mouse_web/data/lab.sqlite`.
 
 ```mermaid
@@ -150,3 +152,68 @@ erDiagram
   TEXT result "nullable JSON; gate definitions/counts, source hashes and artifact directory"
  }
 ```
+
+<a id="graph-metric-erd"></a>
+
+## Graph 측정 항목 분류 ERD
+
+2026-11-06 실험팀 손그림을 바탕으로 정리한 논리 모델이다. 아래에서 대문자는 Graph 선택기에 쓰이는 개념이고, 소문자 `metrics`, `measurements`, `mice`, `uploads`는 SQLite 테이블이다.
+
+| 대분류 | Graph에서 선택하는 순서 | 예시 |
+|---|---|---|
+| Metabolic outcome | 검사 또는 체중 보기 → 측정 항목 | Weight-timeline, Weight-endpoint, ITT, OGTT |
+| Histology | 장기 → 측정 항목 | Liver → HE (%) 또는 PSR (%). 항목을 누르면 바로 그래프에 적용된다. |
+| Flow cytometry | 장기 → 패널 → 마지막 gate 이름 → 측정 지표 | Liver → T Cell Panel → T-bet+ Tregs → Frequency. 다른 장기 예시는 Gut, Spleen이고, 패널 예시는 Treg Panel이다. |
+| qPCR | 장기 → pathway → 유전자 | Liver → Fibrosis → Col1a1 또는 Col3a1. 다른 pathway 예시는 Lipid Metabolic과 Inflammation이다. |
+
+손그림의 qPCR에는 **장기에서 유전자를 바로 선택하는 경로**도 있다. 예를 들면 Liver → Acta2 또는 Col1a1이다. 현재 선택기는 pathway를 거치는 방식이며, 직접 선택은 대안으로 기록한다. 아래 항목은 분류 예시이며 실제 메뉴에는 선택한 마우스에 수치가 있는 항목만 나타난다.
+
+```mermaid
+erDiagram
+    CATEGORY ||--o{ GRAPH_VIEW : contains
+    ORGAN o|--o{ GRAPH_VIEW : scopes
+    METABOLIC_TEST o|--o{ GRAPH_VIEW : selects
+    STAIN o|--o{ GRAPH_VIEW : selects
+    PANEL ||--o{ GATE : defines
+    GATE o|--o{ GRAPH_VIEW : selects
+    PATHWAY o|--o{ GRAPH_VIEW : groups
+    GENE o|--o{ GRAPH_VIEW : selects
+    metrics ||--o{ GRAPH_VIEW : displays
+    metrics ||--o{ measurements : defines
+    mice ||--o{ measurements : contributes
+    uploads o|--o{ measurements : supplies
+
+    GRAPH_VIEW {
+        string category
+        string presentation "timeline, endpoint or assay result"
+    }
+    GATE {
+        string full_path "population identity within panel"
+        string display_name "last path segment"
+    }
+    metrics {
+        integer id PK
+        string identity UK
+        string name
+        string unit
+        string organ
+        string gate
+    }
+    measurements {
+        integer id PK
+        string mouse_id FK
+        integer metric_id FK
+        string timepoint
+        string replicate
+        float value
+        string upload_id FK
+    }
+```
+
+**관계 해석**
+
+- `GRAPH_VIEW` 한 개는 대분류 하나와 측정 항목 하나를 연결한다. 나머지 연결은 대분류에 따라 달라진다. 예를 들어 Histology는 장기와 염색법을 사용하고, Flow cytometry는 장기와 패널에 속한 gate를 사용한다.
+- 체중은 같은 `metric_id`라도 시점에 따라 주차별 추이와 endpoint 두 경로로 볼 수 있다. 두 경로에서 같은 관측값을 복사해 저장할 필요가 없다.
+- FACS의 전체 경로는 `metrics.gate`에 보존한다. 예를 들어 `Cells/SingleCell/SingleCell/CD3+`는 **CD3+**로 표시한다. 같은 장기·패널에 이름이 같은 gate가 있으면 상위 경로로 구분한다. 각 gate에서 Frequency, MFI, Absolute Count는 별도의 측정 항목이다.
+- Import에서 지정한 panel과 pathway는 `metrics.identity`에 포함된다. 한 유전자가 여러 pathway에 나타날 수 있고, 선택한 경로에서 연결된 측정 항목을 그린다.
+- 관측값 한 건은 **Mouse ID × metric ID × timepoint × replicate**로 유일하다. 원본을 가져온 관측값은 `upload_id`와 `source_row`로 출처를 추적한다. 수치 0은 관측값이고, 결측은 `NULL`과 `missing_reason`으로 기록한다.

@@ -11,6 +11,11 @@ def required(v, name, limit=200):
     if not isinstance(v,str) or not v.strip() or len(v)>limit: raise Problem(f'{name}: Enter a value (maximum {limit} characters).')
     return v.strip()
 def clean(v): return '' if v is None else str(v).strip()
+def metric_identity(meta, spec):
+    # Omit empty classifications to preserve existing metric identities.
+    labels = {k: clean(spec.get(k)) for k in ('panel', 'pathway') if clean(spec.get(k))}
+    return dump({**meta, **labels})
+
 def number(v, reason, unit=''):
     if v is None or clean(v)=='':
         if not clean(reason): raise Problem('A missing reason is required for a blank value.')
@@ -165,7 +170,7 @@ CREATE TRIGGER IF NOT EXISTS uploads_no_delete BEFORE DELETE ON uploads BEGIN SE
                 for spec in json.loads(upload['mapping'] or '{}').get('measurements',[]):
                     if not str(spec.get('name','')).startswith('Geometric Mean ('):continue
                     meta={k:clean(spec.get(k)) for k in ('name','unit','organ','gate','parent_gate','denominator')}
-                    metric=metrics_by_identity.get(dump(meta))
+                    metric=metrics_by_identity.get(metric_identity(meta,spec))
                     if metric is not None and spec.get('column'):metric.setdefault('source_header',spec['column'])
             if include_audit:return {'schema_version':2,'data':data,'audit':[dict(r) for r in c.execute('SELECT e.*,u.username FROM events e LEFT JOIN users u ON e.actor=u.id ORDER BY e.id DESC')]}
             return data
@@ -304,7 +309,7 @@ CREATE TRIGGER IF NOT EXISTS uploads_no_delete BEFORE DELETE ON uploads BEGIN SE
                         meta['denominator']='사용자 확인 계산값'
                 required(meta['name'],'Metric');required(meta['unit'],'Unit')
                 if meta['gate'] and not all(meta[k] for k in ('organ','parent_gate','denominator')):raise Problem('A gate requires an organ, parent gate and denominator.')
-                identity=dump(meta)
+                identity=metric_identity(meta,spec)
                 c.execute('INSERT OR IGNORE INTO metrics(identity,name,unit,organ,gate,parent_gate,denominator) VALUES(?,?,?,?,?,?,?)',(identity,*meta.values()))
                 mid=c.execute('SELECT id FROM metrics WHERE identity=?',(identity,)).fetchone()[0]
                 metric_specs.append((spec,meta,mid))
@@ -392,9 +397,9 @@ CREATE TRIGGER IF NOT EXISTS uploads_no_delete BEFORE DELETE ON uploads BEGIN SE
         if not isinstance(config,dict) or len(dump(config))>50000:raise Problem('Invalid preset')
         board=config.get('dashboard')
         if board is not None:
-            if not isinstance(board,dict) or not isinstance(board.get('panels'),list) or not 4<=len(board['panels'])<=8:raise Problem('Save between 4 and 8 graphs.')
+            if not isinstance(board,dict) or not isinstance(board.get('panels'),list) or not 1<=len(board['panels'])<=8:raise Problem('Save between 1 and 8 graphs.')
             count=board.get('count',len(board['panels']))
-            if type(count) is not int or not 4<=count<=len(board['panels']):raise Problem('Invalid graph count')
+            if type(count) is not int or not 1<=count<=len(board['panels']):raise Problem('Invalid graph count')
             active=board.get('active',0)
             if type(active) is not int or not 0<=active<count:raise Problem('Invalid active graph')
             for panel in board['panels']:

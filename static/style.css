@@ -74,3 +74,34 @@
 #importer [aria-invalid="true"] { outline: 2px solid #b42318; outline-offset: 2px; }
 #importer .import-error, #import-validation.has-errors h3 { color: #a51c12; font-weight: 600; }
 #import-validation.has-errors { border-left: 3px solid #b42318; padding-left: 12px; }
+
+#metric-popup {width:min(52rem,90vw);max-height:80vh;padding:1rem;background:white}
+#metric-popup h2 {font-size:1rem;margin:0 0 .8rem}
+#metric-step .metric-columns {display:flex;align-items:flex-start;overflow:auto;height:min(18rem,52vh);border-block:1px solid #ddd;--row:2.25rem}
+#metric-step .metric-column {flex:0 0 12.25rem;box-sizing:border-box;padding-top:calc(var(--row-offset)*var(--row));border-right:1px solid #eee}
+#metric-step .metric-column button {display:flex;align-items:center;justify-content:space-between;gap:.4rem;width:100%;height:var(--row);padding:0 .65rem;border:0;border-radius:0;background:white;text-align:left}
+#metric-step .metric-column button span:first-child {overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#metric-step .metric-column button:hover,#metric-step .metric-column button:focus-visible {background:#f2f2f2}
+#metric-step .metric-column button[aria-pressed="true"] {background:#eaeaea;color:#151515;font-weight:600}
+#metric-step footer {display:flex;justify-content:space-between;margin-top:.6rem}
+.chart-metric-label button,#choose-metric {text-align:left;width:100%}
+
+.controls {
+  display:flex;flex-direction:column;max-height:calc(100dvh - 40px);overflow:hidden;
+  padding:8px;border:1px solid #aaa;border-radius:6px;background:#eee;
+}
+.graph-control-menu {display:grid;flex:none;gap:4px}
+.graph-control-menu button {
+  display:block;text-align:left;padding:9px 12px;border:1px solid #bdbdbd;border-radius:3px;
+  background:#fafafa;color:#222;font-size:16px;line-height:1.35;font-weight:700;
+}
+.graph-control-menu button:hover {background:#e8e8e8}
+.graph-control-menu button:focus-visible {outline:2px solid #444;outline-offset:-3px}
+.graph-control-menu button::before {content:'▸';display:inline-block;width:1.2em;color:#666}
+.graph-control-menu button[aria-expanded="true"] {background:#dadada;border-color:#888}
+.graph-control-menu button[aria-expanded="true"]::before {content:'▾'}
+.graph-control-body {
+  min-height:0;overflow-y:auto;overscroll-behavior:contain;margin-top:8px;
+  padding:12px;border:1px solid #bbb;border-radius:3px;background:white;
+}
+.graph-control-body .sample-list {max-height:none;overflow:visible}

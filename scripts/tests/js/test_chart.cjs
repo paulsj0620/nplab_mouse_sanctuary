@@ -6,7 +6,7 @@ test('all values and grouping respond to global mouse exclusion',()=>{const x=st
 test('technical replicate mixing is rejected',()=>{const x=structuredClone(d);x.measurements.push({...x.measurements[0],replicate:'2'});assert.throws(()=>F.dataset(x,{...c,replicate:''}),/replicate/)});
 test('rendered SVG includes axes, symbols, mean and selected error label',()=>{const r=F.render(d,c);assert.match(r.svg,/data-mouse="1"/);assert.match(r.svg,/Mean ± SD/);assert.match(F.render(d,{...c,error:'SEM'}).svg,/Mean ± SEM/);assert.match(r.svg,/<g data-mouse[^>]+><title>/)});
 test('invalid ranges are blocked and legacy manual labels are ignored',()=>{assert.throws(()=>F.render(d,{...c,ymax:15}),/range|between/);assert.doesNotMatch(F.render(d,{...c,annotations:'A | A | p=0.01',annotationMethod:'legacy'}).svg,/p=0.01/)});
-test('OGTT curves use numeric timepoints and preserve missing n',()=>{const r=F.render(d,{...c,type:'line'});assert.equal(r.summary[1].n,1);assert.match(r.svg,/Time \(min\)/);assert.throws(()=>F.render({...d,measurements:[{...d.measurements[0],timepoint:'endpoint'}]},{...c,type:'line'}),/numeric/)});
+test('OGTT curves use numeric timepoints and preserve missing n',()=>{const ogtt={...d,metrics:[{...d.metrics[0],name:'OGTT'}]};const r=F.render(ogtt,{...c,type:'line'});assert.equal(r.summary[1].n,1);assert.match(r.svg,/Time \(min\)/);assert.throws(()=>F.render({...ogtt,measurements:[{...d.measurements[0],timepoint:'endpoint'}]},{...c,type:'line'}),/numeric/)});
 test('sample selector keeps excluded, missing and zero values and respects filters',()=>{const x=structuredClone(d);x.mice[0].excluded=1;x.mice[0].experiment='E1';x.mice[0].weeks='36';x.mice.push({mouse_id:'3',group_name:'A',excluded:0});x.measurements[0].value=0;x.measurements[1].value=null;const rows=F.sampleRows(x,c);assert.equal(rows.length,3);assert.equal(rows[0].rows[0].value,0);assert.equal(rows[0].mouse.excluded,1);assert.equal(rows[1].rows[0].value,null);assert.equal(rows[2].rows.length,0);assert.equal(F.sampleRows(x,{...c,experiment:'E1',weeks:'36'}).length,1);assert.equal(F.sampleRows(x,{...c,type:'line'})[0].rows.length,2);assert.equal(F.sampleRows(x,{...c,replicate:'2'})[0].rows.length,0)});
 test('hierarchy joins visible graphs by ID and separates Exp/Diet with numeric mouse ordering',()=>{
  const data={mice:[{mouse_id:'10',experiment:'Exp2',diet:'Chow',excluded:0},{mouse_id:'2',experiment:'Exp2',diet:'Chow',excluded:1},{mouse_id:'3',experiment:'Exp10',diet:'Chow',excluded:0},{mouse_id:'4',experiment:'Exp2',diet:'Western',excluded:0}],measurements:[{mouse_id:'10',metric_id:1,timepoint:'0',replicate:'1',value:0},{mouse_id:'2',metric_id:2,timepoint:'0',replicate:'1',value:null},{mouse_id:'3',metric_id:1,timepoint:'0',replicate:'1',value:5}]};
@@ -18,7 +18,7 @@ test('hierarchy joins visible graphs by ID and separates Exp/Diet with numeric m
 test('one shared exclusion updates all eight graphs and combined SVG contains every panel',()=>{
  const data=structuredClone(d);data.metrics=Array.from({length:8},(_,i)=>({id:i+1,name:'Metric '+(i+1),unit:'u'}));data.measurements=data.metrics.flatMap(m=>d.measurements.map(r=>({...r,metric_id:m.id})));const configs=data.metrics.map(m=>({...c,metric:m.id}));
  const before=configs.map(cfg=>F.render(data,cfg));assert.ok(before.every(f=>f.summary[0].n===2));data.mice[0].excluded=1;const after=configs.map(cfg=>F.render(data,cfg));assert.ok(after.every(f=>f.summary[0].n===1&&f.summary[0].mean===20));assert.ok(after.every(f=>!f.svg.includes('data-mouse="1"')));
- const svg=F.composeFigures(after);assert.match(svg,/width="1600" height="2560"/);assert.equal((svg.match(/<svg\b/g)||[]).length,9);assert.match(svg,/>H<\/text>/);assert.throws(()=>F.composeFigures([...after,after[0]]),/Check/);assert.throws(()=>F.composeFigures([{svg:''}]),/graph 1/);
+ const svg=F.composeFigures(after);assert.match(svg,/width="1600" height="2560"/);assert.equal((svg.match(/<svg\b/g)||[]).length,9);assert.match(svg,/>H<\/text>/);assert.throws(()=>F.composeFigures([...after,after[0]]),/Check/);assert.throws(()=>F.composeFigures([{svg:''}]),/at least one graph/);
 });
 test('reference group colors are stable across age, order and missing groups',()=>{assert.equal(F.defaultGroupStyle('36w Chow',9).color,'#000000');assert.equal(F.defaultGroupStyle('10w Western',0).color,'#fc225c');assert.equal(F.defaultGroupStyle('TRF 6:18',5).color,'#197274');assert.equal(F.defaultGroupStyle('TRF 10:14',1).color,'#64c3fa');assert.equal(F.defaultGroupStyle('ADF').color,'#3b0070');assert.equal(F.defaultGroupStyle('RC').color,F.defaultGroupStyle('Reverse').color)});
 test('p-values use numeric formatting and explicit zero precision',()=>{assert.equal(F.formatP(.0019),'p = 0.0019');assert.equal(F.formatP(0),'p ≈ 0');assert.match(F.formatP(1e-8),/1\.00e-8/);assert.throws(()=>F.formatP(1.1),/range|between/)});
@@ -44,4 +44,48 @@ test('DI control scope adds only selected diet/age groups and keeps basic view s
  const key=S.candidates(x).find(g=>g.weeks==='36'&&g.diet==='Chow').key;
  assert.deepEqual(S.selection(x,'di'),['4','5']);assert.deepEqual(S.selection(x,'di',[key,key]),['1','4','5']);assert.deepEqual(S.selection(x,'basic',[key]),['1','2','3']);
  const cfg={...c,scope_mouse_ids:['2']};assert.deepEqual(F.sampleRows(d,cfg).map(s=>s.mouse.mouse_id),['2']);assert.equal(F.dataset(d,cfg).summaries[0].mean,20);assert.equal(F.sampleRows(d,{...c,scope_mouse_ids:[]}).length,0);
+});
+
+test('sparse exports compact the canvas and preserve board letters and errors',()=>{
+ const empty={svg:''},figure=F.render(d,c);
+ const svg=F.composeFigures([empty,empty,figure,empty]);
+ assert.match(svg,/width="800" height="640"/);assert.match(svg,/>C<\/text>/);
+ assert.throws(()=>F.composeFigures([figure,{error:true,message:'Invalid axis'}]),/Graph 2: Invalid axis/);
+});
+test('weekly trends distinguish means and medians and ignore endpoints and excluded mice',()=>{
+ const x=structuredClone(d);x.mice.push({mouse_id:'3',group_name:'A',excluded:0});
+ x.measurements[0].timepoint=x.measurements[1].timepoint='Week 2';
+ x.measurements[2].timepoint='10w';
+ x.measurements.push({...x.measurements[0],mouse_id:'3',value:90},{...x.measurements[0],timepoint:'endpoint',value:999});
+ const render=trend=>F.render(x,{...c,type:'line',trend});
+ assert.deepEqual(render('median').set.times,['2','10']);
+ assert.equal(render('median').summary[0].median,20);assert.equal(render('mean').summary[0].mean,40);
+ assert.notEqual(render('median').svg.match(/<path d="M130 [^"]+ L[^"]+/)[0],render('mean').svg.match(/<path d="M130 [^"]+ L[^"]+/)[0]);
+ assert.doesNotMatch(render('off').svg,/<path d="M130 [^"]+ L/);
+ x.mice[2].excluded=1;assert.equal(render('median').summary[0].median,15);
+ assert.deepEqual(F.metricChoices(x,x.metrics).map(c=>c.view),['weekly','endpoint']);
+});
+test('hierarchy uses actual observations, panel provenance and qPCR pathway',()=>{
+ const metrics=[{name:'HE',organ:'Liver'},{name:'PSR',organ:'Liver'},{name:'CD3',organ:'Gut',gate:'Live/CD3+'},{name:'Col1a1',organ:'Liver',identity:'{"pathway":"Fibrosis"}'},{name:'ITT'}].map((m,i)=>({...m,id:i+1}));
+ const data={metrics,measurements:metrics.map(m=>({metric_id:m.id,upload_id:'u',value:m.id===2?null:0})),uploads:[{id:'u',filename:'T cell panel.xls'}]};
+ assert.deepEqual(F.metricChoices(data,metrics).map(c=>c.path),[['Histology','Liver'],['Flow cytometry','Gut','T Cell Panel','CD3+'],['qPCR','Liver','Fibrosis'],['Metabolic outcome','ITT']]);
+});
+
+test('FACS picker skips ancestor folders while preserving populations and statistics',()=>{
+ const gates=['Cells/SingleCell/SingleCell/CD3+','Cells/SingleCell/SingleCell/CD3+','Cells/Live/Tregs/CD25+','Cells/Live/Teffs/CD25+'];
+ const metrics=gates.map((gate,i)=>({id:i+1,gate,organ:'Liver',name:i===1?'Frequency':'Count',identity:'{"panel":"T Cell Panel"}'}));
+ const measurements=metrics.map(m=>({metric_id:m.id,value:2}));
+ const choices=F.metricChoices({measurements},metrics);
+ assert.deepEqual(choices.map(c=>c.path.at(-1)),['CD3+','CD3+','CD25+ (Cells / Live / Tregs)','CD25+ (Cells / Live / Teffs)']);
+ assert.ok(choices.every(c=>c.path.length===4));
+ assert.deepEqual(choices.map(c=>c.metric.gate),gates);
+});
+
+test('Histology offers measured stains directly under each organ',()=>{
+ const metrics=['HE','PSR','HE','PSR'].map((name,i)=>({id:i+1,name,unit:'%',organ:i<2?'Liver':'Gut'}));
+ const measurements=metrics.map(m=>({metric_id:m.id,value:m.id===4?null:0}));
+ const choices=F.metricChoices({measurements},metrics);
+ assert.deepEqual(choices.map(({path,metric})=>[...path,metric.name,metric.unit,metric.id]),[
+  ['Histology','Liver','HE','%',1],['Histology','Liver','PSR','%',2],['Histology','Gut','HE','%',3]
+ ]);
 });
