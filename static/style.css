@@ -58,3 +58,19 @@
 .home-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
 
 .import-tabs{display:flex;gap:4px;border-bottom:1px solid #ccc;margin:0 0 20px}.import-tabs button{border:0;border-radius:0;padding:12px 24px;background:white;color:#666}.import-tabs button[aria-selected="true"]{color:#111;font-weight:700;border-bottom:3px solid #111}#import-kind-help{max-width:1000px;line-height:1.6}#import-validation{margin:18px 0}
+
+/* Graph quick-selection buttons: persistent selected state, distinct from hover. */
+#graphs .import-tabs[role="group"]{gap:8px;border:0;margin-bottom:10px}
+#graphs .import-tabs [data-study]{border:1px solid #bbb;border-radius:5px;padding:11px 20px;color:#333;font-weight:600}
+#graphs .import-tabs [data-study]:hover{background:#f1f1f1;border-color:#555}
+#graphs .import-tabs [data-study][aria-pressed="true"]{background:#222;color:#fff;border-color:#222;font-weight:700;box-shadow:0 0 0 1px #222}
+#graphs .import-tabs [data-study]:focus-visible{outline:2px solid #555;outline-offset:4px}
+#graph-selection-status{font-weight:700;color:#222;margin:8px 0}
+
+.language-bar{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:8px 24px;background:#fff;border-bottom:1px solid #eee;font-size:12px}.language-bar label{margin:0}.language-bar select{width:auto;padding:5px 8px}
+
+.language-bar{border-bottom:0;border-top:1px solid #eee;margin-top:24px}
+
+#importer [aria-invalid="true"] { outline: 2px solid #b42318; outline-offset: 2px; }
+#importer .import-error, #import-validation.has-errors h3 { color: #a51c12; font-weight: 600; }
+#import-validation.has-errors { border-left: 3px solid #b42318; padding-left: 12px; }

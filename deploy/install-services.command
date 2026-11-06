@@ -14,4 +14,6 @@ install -m 600 "$LAB_APP_DIR/deploy/generated/com.mouselab.server.plist" "$LAB_A
 install -m 600 "$LAB_APP_DIR/deploy/generated/com.mouselab.backup.plist" "$LAB_AGENT_DIR/com.mouselab.backup.plist"
 launchctl bootstrap "gui/$LAB_USER_ID" "$LAB_AGENT_DIR/com.mouselab.server.plist"
 launchctl bootstrap "gui/$LAB_USER_ID" "$LAB_AGENT_DIR/com.mouselab.backup.plist"
+install -m 600 "$LAB_APP_DIR/deploy/generated/com.mouselab.workday-awake.plist" "$LAB_AGENT_DIR/com.mouselab.workday-awake.plist"
+launchctl bootstrap "gui/$LAB_USER_ID" "$LAB_AGENT_DIR/com.mouselab.workday-awake.plist"
 echo '로그인 후 자동 실행과 매일 03:00 백업을 등록했습니다. 외부 접속은 아직 활성화하지 않았습니다.'

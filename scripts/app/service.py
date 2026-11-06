@@ -28,12 +28,22 @@ class ClosingConnection(sqlite3.Connection):
         finally:self.close()
 
 class Store:
-    def __init__(self, path, seed=None):
+    def __init__(self, path, seed=None, *, existing_only=False):
         self.import_review_secret=secrets.token_bytes(32)
+        self.existing_only = existing_only
+        if existing_only:
+            self.path = Path(path).resolve().as_uri() + '?mode=rw'
+            with self.db() as c:
+                if not c.execute('SELECT 1 FROM users LIMIT 1').fetchone():
+                    raise RuntimeError('Expected an initialized site with existing accounts.')
+            return
         self.path=str(path);Path(path).parent.mkdir(parents=True,exist_ok=True)
         with self.db() as c:
             c.executescript('''
 CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,username TEXT UNIQUE NOT NULL,password TEXT NOT NULL,salt TEXT NOT NULL,role TEXT NOT NULL,created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS login_history(id INTEGER PRIMARY KEY,user_id INTEGER REFERENCES users(id),username TEXT NOT NULL,outcome TEXT NOT NULL CHECK(outcome IN ('success','failure','blocked')),created_at TEXT NOT NULL);
+CREATE TRIGGER IF NOT EXISTS login_history_no_update BEFORE UPDATE ON login_history BEGIN SELECT RAISE(ABORT,'login history is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS login_history_no_delete BEFORE DELETE ON login_history BEGIN SELECT RAISE(ABORT,'login history is append-only'); END;
 CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user_id INTEGER REFERENCES users(id),csrf TEXT NOT NULL,expires REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS mice(mouse_id TEXT PRIMARY KEY,group_name TEXT NOT NULL,experiment TEXT NOT NULL DEFAULT '',weeks TEXT NOT NULL DEFAULT '',diet TEXT NOT NULL DEFAULT '',note TEXT NOT NULL DEFAULT '',excluded INTEGER NOT NULL DEFAULT 0,version INTEGER NOT NULL DEFAULT 1,source TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS metrics(id INTEGER PRIMARY KEY,identity TEXT UNIQUE NOT NULL,name TEXT NOT NULL,unit TEXT NOT NULL,organ TEXT NOT NULL,gate TEXT NOT NULL,parent_gate TEXT NOT NULL,denominator TEXT NOT NULL);
@@ -53,7 +63,7 @@ CREATE TRIGGER IF NOT EXISTS uploads_no_delete BEFORE DELETE ON uploads BEGIN SE
                 for m in data['mice']:
                     c.execute('INSERT INTO mice(mouse_id,group_name,experiment,weeks,diet,note,source) VALUES(?,?,?,?,?,?,?)',(m['mouse_id'],m['group'],m['experiment'],str(m['weeks']) if m['weeks'] is not None else '',m['diet'],m['note'],dump({'sheet':'Sheet1','cell':m['source_cell'],'sha256':data['sha256'],'raw_group':m['raw_group']})))
     def db(self):
-        c=sqlite3.connect(self.path,timeout=15,factory=ClosingConnection);c.row_factory=sqlite3.Row;c.execute('PRAGMA foreign_keys=ON');return c
+        c=sqlite3.connect(self.path,uri=self.existing_only,timeout=15,factory=ClosingConnection);c.row_factory=sqlite3.Row;c.execute('PRAGMA foreign_keys=ON');return c
     def event(self,c,actor,action,entity,eid,before,after,reason):
         c.execute('INSERT INTO events(actor,action,entity,entity_id,before_json,after_json,reason,created_at) VALUES(?,?,?,?,?,?,?,?)',(actor,action,entity,str(eid),dump(before),dump(after),required(reason,'Reason',2000),stamp()))
     def create_user(self,username,password,role='editor',actor=None,setup=False):
@@ -69,7 +79,7 @@ CREATE TRIGGER IF NOT EXISTS uploads_no_delete BEFORE DELETE ON uploads BEGIN SE
                 if not u or u['role']!='admin':raise Problem('Only administrators can add accounts.',403)
             try: uid=c.execute('INSERT INTO users(username,password,salt,role,created_at) VALUES(?,?,?,?,?)',(username,hashed,salt,role,stamp())).lastrowid
             except sqlite3.IntegrityError:raise Problem('This username already exists.',409)
-            self.event(c,actor or uid,'create','user',uid,None,{'username':username,'role':role},'계정 생성')
+            self.event(c,actor or uid,'create','user',uid,None,{'username':username,'role':role},'Account created')
         return {'id':uid,'username':username,'role':role}
     def rename_user(self, target_id, username, expected_username, actor):
         username=required(username,'Username',80)
@@ -110,15 +120,33 @@ CREATE TRIGGER IF NOT EXISTS uploads_no_delete BEFORE DELETE ON uploads BEGIN SE
             self.event(c,actor,'password_change','user',actor,None,{'sessions_revoked':True},'Password changed by account owner')
         return {'ok':True}
 
-    def login(self,username,password):
+    def record_login(self,username,outcome):
+        name=username[:80] if isinstance(username,str) else '(invalid username)'
         with self.db() as c:
-            u=c.execute('SELECT * FROM users WHERE username=?',(username,)).fetchone()
-            if not u:raise Problem('Check your username and password.',401)
-            candidate=hashlib.pbkdf2_hmac('sha256',str(password).encode(),bytes.fromhex(u['salt']),600000).hex()
-            if not secrets.compare_digest(candidate,u['password']):raise Problem('Check your username and password.',401)
-            token=secrets.token_urlsafe(32);csrf=secrets.token_urlsafe(24)
-            c.execute('DELETE FROM sessions WHERE expires<?',(time.time(),))
-            c.execute('INSERT INTO sessions VALUES(?,?,?,?)',(hashlib.sha256(token.encode()).hexdigest(),u['id'],csrf,time.time()+43200))
+            u=c.execute('SELECT id FROM users WHERE username=?',(name,)).fetchone()
+            c.execute('INSERT INTO login_history(user_id,username,outcome,created_at) VALUES(?,?,?,?)',(u['id'] if u else None,name,outcome,stamp()))
+
+    def login_history(self,actor,before=0):
+        with self.db() as c:
+            u=c.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
+            if not u or u['role']!='admin':raise Problem('Only administrators can view this.',403)
+            rows=[dict(r) for r in c.execute('SELECT * FROM login_history WHERE (?=0 OR id<?) ORDER BY id DESC LIMIT 101',(before,before))]
+        return {'rows':rows[:100],'next_before':rows[99]['id'] if len(rows)>100 else None}
+
+    def login(self,username,password):
+        name=username[:80] if isinstance(username,str) else '(invalid username)'
+        with self.db() as c:
+            u=c.execute('SELECT * FROM users WHERE username=?',(username if isinstance(username,str) else '',)).fetchone()
+            valid=False
+            if u and isinstance(password,str):
+                candidate=hashlib.pbkdf2_hmac('sha256',password.encode(),bytes.fromhex(u['salt']),600000).hex()
+                valid=secrets.compare_digest(candidate,u['password'])
+            c.execute('INSERT INTO login_history(user_id,username,outcome,created_at) VALUES(?,?,?,?)',(u['id'] if u else None,name,'success' if valid else 'failure',stamp()))
+            if valid:
+                token=secrets.token_urlsafe(32);csrf=secrets.token_urlsafe(24)
+                c.execute('DELETE FROM sessions WHERE expires<?',(time.time(),))
+                c.execute('INSERT INTO sessions VALUES(?,?,?,?)',(hashlib.sha256(token.encode()).hexdigest(),u['id'],csrf,time.time()+43200))
+        if not valid:raise Problem('Check your username and password.',401)
         return token,{'id':u['id'],'username':u['username'],'role':u['role'],'csrf':csrf}
     def session(self,token):
         with self.db() as c:
@@ -129,6 +157,9 @@ CREATE TRIGGER IF NOT EXISTS uploads_no_delete BEFORE DELETE ON uploads BEGIN SE
         with self.db() as c:
             c.execute('BEGIN')
             data={'mice':[dict(r) for r in c.execute('SELECT * FROM mice ORDER BY length(mouse_id),mouse_id')], 'metrics':[dict(r) for r in c.execute('SELECT * FROM metrics ORDER BY name,organ,gate')], 'measurements':[dict(r) for r in c.execute('SELECT * FROM measurements')], 'presets':[{**dict(r),'config':json.loads(r['config'])} for r in c.execute('SELECT * FROM presets')], 'uploads':[dict(r) for r in c.execute("SELECT uploads.id,filename,sha256,uploads.created_at,status,u.username AS uploaded_by FROM uploads JOIN users u ON u.id=uploads.owner WHERE status='committed' ORDER BY uploads.created_at DESC")], 'revision':c.execute('SELECT coalesce(max(id),0) FROM events').fetchone()[0]}
+            from scripts.paths import ROOT
+            try: data['experiment_types']=json.loads((ROOT/'config/experiment_types.json').read_text())
+            except (OSError,ValueError): data['experiment_types']={}
             metrics_by_identity={m['identity']:m for m in data['metrics']}
             for upload in c.execute("SELECT mapping FROM uploads WHERE status='committed' ORDER BY created_at DESC,id"):
                 for spec in json.loads(upload['mapping'] or '{}').get('measurements',[]):
@@ -140,6 +171,31 @@ CREATE TRIGGER IF NOT EXISTS uploads_no_delete BEFORE DELETE ON uploads BEGIN SE
             return data
     def audit(self):
         with self.db() as c:return [dict(r) for r in c.execute('SELECT e.*,u.username FROM events e LEFT JOIN users u ON e.actor=u.id ORDER BY e.id DESC')]
+    def archive_upload(self, uid, actor, reason):
+        reason = required(reason, 'Removal reason', 2000)
+        with self.db() as c:
+            c.execute('BEGIN IMMEDIATE')
+            upload = c.execute('SELECT filename,owner,status FROM uploads WHERE id=?', (uid,)).fetchone()
+            if not upload:
+                raise Problem('Upload not found.', 404)
+            role = c.execute('SELECT role FROM users WHERE id=?', (actor,)).fetchone()
+            if not role or not (role[0] == 'admin' or (role[0] == 'editor' and upload['owner'] == actor)):
+                raise Problem('Only the uploader or an administrator can remove this import.', 403)
+            if upload['status'] == 'archived':
+                return {'removed': 0}
+            if upload['status'] != 'committed':
+                raise Problem('Only a saved import can be removed.', 409)
+            c.execute('CREATE TABLE IF NOT EXISTS archived_test_measurements AS SELECT * FROM measurements WHERE 0')
+            c.execute('INSERT INTO archived_test_measurements SELECT * FROM measurements WHERE upload_id=?', (uid,))
+            count = c.execute('DELETE FROM measurements WHERE upload_id=?', (uid,)).rowcount
+            linked = [r[0] for r in c.execute('SELECT mouse_id FROM upload_mice WHERE upload_id=?', (uid,))]
+            c.execute('DELETE FROM upload_mice WHERE upload_id=?', (uid,))
+            c.execute("UPDATE uploads SET status='archived' WHERE id=?", (uid,))
+            self.event(c, actor, 'archive', 'upload', uid,
+                       {'filename': upload['filename'], 'measurements': count, 'linked_mice': linked},
+                       {'status': 'archived'}, reason)
+            return {'removed': count}
+
     def stage(self,filename,encoded,actor):
         filename=required(filename,'Filename',250)
         try:raw=base64.b64decode(encoded,validate=True)
@@ -181,7 +237,10 @@ CREATE TRIGGER IF NOT EXISTS uploads_no_delete BEFORE DELETE ON uploads BEGIN SE
         if filename.lower().endswith('.xlsx'):
             from scripts.imports.histology import normalize
             normalized=normalize(rows,sheets,selected,Problem)
-            if normalized is not None:return normalized
+            if normalized is not None:
+                if selected == 'Sheet1' and hashlib.sha256(raw).hexdigest() == '022f8c6047d10bcaa322649f261db6eccb74faceed87b8264084fd5f387314f2':
+                    normalized['confirmed_histology'] = {'organ': 'Liver', 'unit': '%'}
+                return normalized
         headers=[clean(v) for v in rows[0]]
         while headers and not headers[-1]:headers.pop()
         if len(headers)>200 or len(rows)>10001:raise Problem('The limit is 10,000 rows and 200 columns.')
@@ -361,5 +420,5 @@ CREATE TRIGGER IF NOT EXISTS uploads_no_delete BEFORE DELETE ON uploads BEGIN SE
             if old and data.get('version')!=old['version']:raise Problem('The preset has changed. Reload it.',409)
             if old:c.execute('UPDATE presets SET config=?,version=version+1,updated_at=? WHERE id=?',(dump(config),stamp(),old['id']))
             else:c.execute('INSERT INTO presets(name,config,updated_at) VALUES(?,?,?)',(name,dump(config),stamp()))
-            new=dict(c.execute('SELECT * FROM presets WHERE name=?',(name,)).fetchone());self.event(c,actor,'save','preset',new['id'],dict(old) if old else None,new,'그래프 서식 저장')
+            new=dict(c.execute('SELECT * FROM presets WHERE name=?',(name,)).fetchone());self.event(c,actor,'save','preset',new['id'],dict(old) if old else None,new,'Graph preset saved')
         return new

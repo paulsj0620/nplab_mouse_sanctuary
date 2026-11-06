@@ -13,6 +13,27 @@ def snapshot(groups):
 
 CFG={'metric':1,'type':'bar','grouping':'group_name','replicate':'1','timepoint':'endpoint','styles':{}}
 class StatisticalTests(unittest.TestCase):
+    def test_experiment_scope_keeps_di_controls_and_empty_scope(self):
+        data=snapshot({'Chow':[1,2,30,40],'Western':[4,5,60,70]})
+        for i,mouse in enumerate(data['mice']):mouse['experiment']='Exp1' if i%4<2 else 'Exp9'
+        basic=analyze_panel(data,{**CFG,'scope_experiments':['Exp1']},[],Problem)
+        di=analyze_panel(data,{**CFG,'scope_experiments':['Exp9']},[],Problem)
+        self.assertEqual([g['mouse_ids'] for g in basic['groups']],[['1','2'],['5','6']])
+        self.assertEqual([g['mouse_ids'] for g in di['groups']],[['3','4'],['7','8']])
+        self.assertNotEqual(basic['data_sha256'],di['data_sha256'])
+        self.assertEqual(analyze_panel(data,{**CFG,'scope_experiments':[]},[],Problem)['groups'],[])
+        with self.assertRaises(Problem):analyze_panel(data,{**CFG,'scope_experiments':'Exp9'},[],Problem)
+
+    def test_mouse_scope_matches_selected_controls_and_exclusions(self):
+        data=snapshot({'Chow':[1,2,100],'ADF':[4,5,200]})
+        cfg={**CFG,'scope_mouse_ids':['1','2','4','5']}
+        result=analyze_panel(data,cfg,[],Problem)
+        self.assertEqual({m for g in result['groups'] for m in g['mouse_ids']},{'1','2','4','5'})
+        changed=analyze_panel(data,cfg,[{'mouse_id':'1','included':False}],Problem)
+        self.assertEqual(next(g['n'] for g in changed['groups'] if g['group']=='Chow'),1)
+        self.assertEqual(analyze_panel(data,{**CFG,'scope_mouse_ids':[]},[],Problem)['groups'],[])
+        with self.assertRaises(Problem):analyze_panel(data,{**CFG,'scope_mouse_ids':'1'},[],Problem)
+
     def test_analytical_anova_and_all_pairs_family(self):
         result=analyze_panel(snapshot({'A':[1,2,3],'B':[4,5,6],'C':[7,8,9]}),CFG,[],Problem)
         self.assertEqual(result['status'],'ok');self.assertAlmostEqual(result['anova']['f'],27)

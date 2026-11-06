@@ -26,6 +26,24 @@ def describe(headers, rows, source_rows, block=1):
         specs.append({'column':header,'name':stat,'unit':'events' if stat=='Count' else '%' if stat.startswith('Freq.') else 'a.u.', 'organ':organs[0] if len(organs)==1 else '', 'gate':gate,'parent_gate':parent,'denominator':parent if stat.startswith('Freq.') else '해당 gate의 event 수' if stat=='Count' else '해당 gate의 형광 강도', 'timepoint':'endpoint'})
     return {'samples':samples,'specs':specs,'block':block,'needs_statistic':block>1,'organs':organs}
 
+def confirmed_count_profile(choices):
+    # Match the lab-confirmed calculated table by its cells, even after Excel
+    # rewrites workbook metadata. Never infer units from a generic Count header.
+    for label, (sheet, start, end, block) in choices.items():
+        if sheet.name != 'Sheet0 (2)' or start != 92 or block != 2:
+            continue
+        digest = hashlib.sha256()
+        for row in range(start, end):
+            cells = sheet.row_values(row)
+            if not any(str(cell).strip() for cell in cells):
+                continue
+            values = json.dumps(cells, ensure_ascii=False, separators=(',', ':'))
+            digest.update(values.encode() + b'\n')
+        if digest.hexdigest() == '56b545d150034a849af34e8e5d3a47a186c3987cb6df0a7f0545943f84a92754':
+            return {'table': label, 'statistic': 'Absolute Count', 'unit': 'cells/µL'}
+    return {}
+
+
 def read_xls(raw, selected, Problem):
     try:
         import xlrd
@@ -42,7 +60,7 @@ def read_xls(raw, selected, Problem):
     if not choices:raise Problem('XLS supports FACS exports with gate | statistic headers. Save ordinary tables as XLSX or CSV.')
     profiles_path=(PROJECT_ROOT/'config/import_profiles.json')
     profiles=json.loads(profiles_path.read_text()) if profiles_path.exists() else {}
-    profile=profiles.get(hashlib.sha256(raw).hexdigest(),{})
+    profile=profiles.get(hashlib.sha256(raw).hexdigest()) or confirmed_count_profile(choices)
     selected=selected or profile.get('table') or next(iter(choices))
     if selected not in choices:raise Problem('Sheet or table not found.')
     s,start,end,block=choices[selected]

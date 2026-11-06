@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import socket
 import argparse, ipaddress, json, os, mimetypes, secrets, sqlite3, time, threading, traceback
 from pathlib import Path
 from scripts.paths import ROOT as PROJECT_ROOT
@@ -47,20 +48,24 @@ class Handler(BaseHTTPRequestHandler):
     def dispatch(self):
         if self.server.allowed_networks and not any(ipaddress.ip_address(self.client_address[0]) in network for network in self.server.allowed_networks):raise Problem('Access is restricted to the permitted laboratory network.',403)
         store=self.server.store;path=unquote(urlparse(self.path).path)
+        if self.server.hosted and (path in ('/api/setup','/api/source/seed') or path.startswith('/api/fcs/')):
+            raise Problem('Not available on this site.',404)
         if self.command=='GET' and not path.startswith('/api/'):
-            files={'/':'index.html','/app.js':'app.js','/chart.js':'chart.js','/style.css':'style.css','/fcs.js':'fcs.js','/mouse-cemetery.png':'mouse-cemetery.png'}
+            files={'/':'index.html','/app.js':'app.js','/i18n.js':'i18n.js','/study.js':'study.js','/chart.js':'chart.js','/style.css':'style.css','/fcs.js':'fcs.js','/mouse-cemetery.png':'mouse-cemetery.png'}
             if path not in files:raise Problem('Not found.',404)
             p=ROOT/'static'/files[path];return self.respond(200,p.read_bytes(),mimetypes.guess_type(p.name)[0]+('' if p.suffix=='.png' else '; charset=utf-8'))
         if self.command=='GET' and path=='/api/me':
             with store.db() as c:setup=c.execute('SELECT count(*) FROM users').fetchone()[0]==0
             try:u=store.session(self.token())
             except Problem:u=None
-            return self.respond(200,{'user':public_user(u),'setup_required':setup,'local_setup_allowed':self.client_address[0] in ('127.0.0.1','::1')})
+            return self.respond(200,{'user':public_user(u),'setup_required':setup,'local_setup_allowed':not self.server.hosted and self.client_address[0] in ('127.0.0.1','::1')})
         if self.command=='POST' and path in ('/api/login','/api/setup'):
             d=self.body()
             with self.server.rate_lock:
                 now=time.time();attempts=[t for t in self.server.attempts.get(self.client_address[0],[]) if now-t<300]
-                if len(attempts)>=15:raise Problem('Please wait before trying to log in again.',429)
+                if len(attempts)>=15:
+                    store.record_login(d.get('username'),'blocked')
+                    raise Problem('Please wait before trying to log in again.',429)
                 self.server.attempts[self.client_address[0]]=attempts+[now]
             if path=='/api/setup':
                 if self.client_address[0] not in ('127.0.0.1','::1'):raise Problem('Set up the first administrator on the server computer.',403)
@@ -103,13 +108,21 @@ class Handler(BaseHTTPRequestHandler):
             if path=='/api/audit':return self.respond(200,visible_audit(store.audit(),user))
             if path=='/api/export':
                 bundle=store.snapshot(include_audit=True);bundle['schema_version']=3
-                with store.db() as c:
-                    bundle['fcs_files']=[dict(r) for r in c.execute('SELECT * FROM fcs_files')]
-                    bundle['fcs_runs']=[dict(r) for r in c.execute('SELECT * FROM fcs_runs')]
-                if not fcs_allowed(user):
-                    bundle.pop('fcs_files',None);bundle.pop('fcs_runs',None);bundle['audit']=visible_audit(bundle['audit'],user)
-                bundle['fcs_note']='Manifest only: original FCS/WSP bytes are available through authenticated original-file downloads and full backup bundles.'
+                if not self.server.hosted:
+                    with store.db() as c:
+                        bundle['fcs_files']=[dict(r) for r in c.execute('SELECT * FROM fcs_files')]
+                        bundle['fcs_runs']=[dict(r) for r in c.execute('SELECT * FROM fcs_runs')]
+                    if not fcs_allowed(user):
+                        bundle.pop('fcs_files',None);bundle.pop('fcs_runs',None);bundle['audit']=visible_audit(bundle['audit'],user)
+                    bundle['fcs_note']='Manifest only: original FCS/WSP bytes are available through authenticated original-file downloads and full backup bundles.'
+                else:
+                    bundle['audit']=visible_audit(bundle['audit'],user)
                 return self.respond(200,bundle,download='mouse-lab-data.json')
+            if path=='/api/login-history':
+                try:before=int(parse_qs(urlparse(self.path).query).get('before',['0'])[0])
+                except ValueError:raise Problem('Invalid history cursor')
+                if before<0:raise Problem('Invalid history cursor')
+                return self.respond(200,store.login_history(user['id'],before))
             if path=='/api/users':
                 if user['role']!='admin':raise Problem('Only administrators can view this.',403)
                 with store.db() as c:users=[dict(r) for r in c.execute('SELECT id,username,role,created_at FROM users')]
@@ -151,7 +164,14 @@ class Handler(BaseHTTPRequestHandler):
                 import hashlib
                 with store.db() as c:c.execute('DELETE FROM sessions WHERE token=?',(hashlib.sha256(self.token().encode()).hexdigest(),))
                 return self.respond(200,{'ok':True},cookie='lab_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0')
+            if path=='/api/login-history':
+                try:before=int(parse_qs(urlparse(self.path).query).get('before',['0'])[0])
+                except ValueError:raise Problem('Invalid history cursor')
+                if before<0:raise Problem('Invalid history cursor')
+                return self.respond(200,store.login_history(user['id'],before))
             if path=='/api/users':return self.respond(201,store.create_user(d.get('username'),d.get('password'),d.get('role','editor'),user['id']))
+            if path=='/api/import/remove':
+                return self.respond(200,store.archive_upload(d.get('upload_id'),user['id'],d.get('reason')))
             if path=='/api/upload':return self.respond(201,store.stage(d.get('filename'),d.get('content'),user['id']))
             if path=='/api/preview':return self.respond(200,store.preview(d.get('upload_id'),user['id'],d.get('sheet')))
             if path=='/api/import/review':return self.respond(200,store.review_import(d.get('upload_id'),d.get('mapping',{}),user['id']))
@@ -173,21 +193,35 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:traceback.print_exc();self.respond(500,{'error':'An error occurred while processing the request.'})
     do_GET=handle_request;do_POST=handle_request;do_PATCH=handle_request
 
-def make_server(host,port,db,secure=False,allowed_networks=()):
-    server=ThreadingHTTPServer((host,port),Handler);server.daemon_threads=True
+class IPv6Server(ThreadingHTTPServer):
+    address_family = socket.AF_INET6
+
+def make_server(host,port,db,secure=False,allowed_networks=(),*,hosted=False):
+    server_class = IPv6Server if ':' in host else ThreadingHTTPServer
+    server=server_class((host,port),Handler);server.daemon_threads=True
+    server.hosted = hosted
     server.allowed_networks=tuple(ipaddress.ip_network(n,strict=True) for n in allowed_networks)
-    server.store=Store(db,ROOT/'archives/seed/roster.json')
+    server.secure=secure;server.attempts={};server.rate_lock=threading.Lock()
+    if hosted:
+        server.store = Store(db, existing_only=True)
+        return server
+    seed = ROOT/'archives/seed/roster.json'
+    server.store=Store(db, seed if seed.is_file() else None)
     from scripts.fcs.fcs_storage import FCSLibrary
     server.fcs=FCSLibrary(server.store)
-    server.secure=secure;server.attempts={};server.rate_lock=threading.Lock()
     original_close=server.server_close
     def close():
         server.fcs.stop.set();server.fcs.wake.set();server.fcs.thread.join(timeout=2);original_close()
     server.server_close=close
     return server
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('--host',default='127.0.0.1');p.add_argument('--port',type=int,default=8000);p.add_argument('--db',default=str(ROOT/'data/lab.sqlite'));p.add_argument('--secure-cookie',action='store_true');p.add_argument('--allow-network',action='append',default=[],type=lambda n:str(ipaddress.ip_network(n,strict=True)));args=p.parse_args()
-    server=make_server(args.host,args.port,args.db,args.secure_cookie,args.allow_network)
+    p=argparse.ArgumentParser();p.add_argument('--host',default='127.0.0.1');p.add_argument('--port',type=int,default=8000);p.add_argument('--db',default=str(ROOT/'data/lab.sqlite'));p.add_argument('--secure-cookie',action='store_true');p.add_argument('--allow-network',action='append',default=[],type=lambda n:str(ipaddress.ip_network(n,strict=True)));p.add_argument('--alwaysdata',action='store_true');args=p.parse_args()
+    if args.alwaysdata:
+        os.umask(0o077)
+        args.host, args.port = os.environ['IP'], int(os.environ['PORT'])
+        server = make_server(args.host, args.port, Path.home()/'mouse-sanctuary/data/lab.sqlite', secure=True, hosted=True)
+    else:
+        server=make_server(args.host,args.port,args.db,args.secure_cookie,args.allow_network)
     print(f'Mouse Sanctuary: http://{args.host}:{args.port}',flush=True)
     try:server.serve_forever()
     except KeyboardInterrupt:server.server_close()

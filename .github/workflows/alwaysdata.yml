@@ -1,0 +1,73 @@
+name: Test and deploy Mouse Sanctuary
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements/requirements.txt
+      - run: python -m unittest scripts.tests.test_accounts scripts.tests.test_import_review scripts.tests.test_login_history scripts.tests.test_statistical
+      - run: node --test scripts/tests/js/test_chart.cjs scripts/tests/js/test_i18n.cjs
+      - run: python scripts/deployment/alwaysdata.py
+
+  deploy:
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_ALWAYSDATA == 'true'
+    environment: production
+    concurrency:
+      group: alwaysdata-production
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Deploy this commit and restart the site
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.ALWAYSDATA_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ALWAYSDATA_KNOWN_HOSTS }}
+          ALWAYSDATA_API_TOKEN: ${{ secrets.ALWAYSDATA_API_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          if [ "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')" != "$GITHUB_SHA" ]; then
+            echo "A newer main commit superseded this deployment."
+            exit 0
+          fi
+          : "${SSH_PRIVATE_KEY:?Missing deploy key}" "${KNOWN_HOSTS:?Missing pinned host keys}" "${ALWAYSDATA_API_TOKEN:?Missing restart token}"
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/nplab_deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          cat >> ~/.ssh/config <<'EOF'
+          Host ssh-nplab.alwaysdata.net
+            IdentityFile ~/.ssh/nplab_deploy
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            BatchMode yes
+          EOF
+          ssh-keygen -F ssh-nplab.alwaysdata.net > /dev/null
+          python3 scripts/deployment/alwaysdata.py --deploy --restart-site 1100985
+          for attempt in {1..15}; do
+            if curl -fsS --max-time 8 "https://nplab.alwaysdata.net/app.js?commit=$GITHUB_SHA&attempt=$attempt" -o "$RUNNER_TEMP/live.js" &&
+               cmp -s "$RUNNER_TEMP/live.js" static/app.js &&
+               curl -fsS --max-time 8 https://nplab.alwaysdata.net/api/me | python3 -c 'import json, sys; assert json.load(sys.stdin)["setup_required"] is False'; then
+              exit 0
+            fi
+            sleep 3
+          done
+          exit 1

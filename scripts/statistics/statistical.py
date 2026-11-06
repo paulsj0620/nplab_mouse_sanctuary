@@ -16,7 +16,11 @@ def analyze_panel(snapshot, config, overrides, Problem):
         selected[row['mouse_id']]=row['included']
     known={m['mouse_id'] for m in snapshot['mice']}
     if set(selected)-known:raise Problem('A selected sample ID was not found.')
-    roster={m['mouse_id']:m for m in snapshot['mice'] if (not config.get('experiment') or m['experiment']==config['experiment']) and (not config.get('weeks') or str(m['weeks'])==str(config['weeks']))}
+    scope=config.get('scope_experiments')
+    if scope is not None and (not isinstance(scope,list) or any(not isinstance(e,str) for e in scope)):raise Problem('Invalid experiment scope')
+    mouse_scope=config.get('scope_mouse_ids')
+    if mouse_scope is not None and (not isinstance(mouse_scope,list) or any(not isinstance(mid,str) for mid in mouse_scope)):raise Problem('Invalid mouse scope')
+    roster={m['mouse_id']:m for m in snapshot['mice'] if (mouse_scope is None or m['mouse_id'] in mouse_scope) and (scope is None or m['experiment'] in scope) and (not config.get('experiment') or m['experiment']==config['experiment']) and (not config.get('weeks') or str(m['weeks'])==str(config['weeks']))}
     styles=config.get('styles',{})
     if not isinstance(styles,dict):raise Problem('Invalid group settings')
     groups={};seen=set()
@@ -24,7 +28,7 @@ def analyze_panel(snapshot, config, overrides, Problem):
         if row['metric_id']!=metric_id or row['mouse_id'] not in roster:continue
         if config.get('replicate') and row['replicate']!=config['replicate']:continue
         if config.get('timepoint') and row['timepoint']!=config['timepoint']:continue
-        mouse=roster[row['mouse_id']];group=mouse.get(config['grouping']) or '미기재'
+        mouse=roster[row['mouse_id']];group=mouse.get(config['grouping']) or 'Not specified'
         if not isinstance(styles.get(group,{}),dict):raise Problem('Invalid group settings')
         style=styles.get(group,{})
         if 'include' in style and not isinstance(style['include'],bool):raise Problem('Invalid group inclusion status')

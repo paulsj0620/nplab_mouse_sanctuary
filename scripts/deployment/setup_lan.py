@@ -12,10 +12,10 @@ args=config['ProgramArguments'];args[args.index('--host')+1]=str(host);args.remo
 with path.open('wb') as f:plistlib.dump(config,f)
 if a.install:
  target=Path.home()/'Library/LaunchAgents';target.mkdir(exist_ok=True)
- for label in ['com.mouselab.server','com.mouselab.backup']:
+ for label in ['com.mouselab.server','com.mouselab.backup','com.mouselab.workday-awake']:
   existing=subprocess.run(['launchctl','print',f'gui/{os.getuid()}/{label}'],capture_output=True)
   if existing.returncode==0:raise RuntimeError('이미 실행 중인 서비스가 있습니다: '+label)
- for label in ['com.mouselab.server','com.mouselab.backup']:
+ for label in ['com.mouselab.server','com.mouselab.backup','com.mouselab.workday-awake']:
   dest=target/(label+'.plist');shutil.copy2(output/(label+'.plist'),dest);dest.chmod(0o600)
   subprocess.run(['launchctl','bootstrap',f'gui/{os.getuid()}',str(dest)],check=True)
 print(f'http://{host}:8000/ · allowed network {network}')

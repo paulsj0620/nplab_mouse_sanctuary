@@ -19,30 +19,30 @@ function marker(x,y,shape,color,size=4.5,open=false,attrs=''){
  return `<circle cx="${x}" cy="${y}" r="${size}" ${a}/>`;
 }
 function dataset(data,cfg){
- const mice=data.mice.filter(m=>(!cfg.experiment||m.experiment===cfg.experiment)&&(!cfg.weeks||m.weeks===cfg.weeks));const byId=new Map(mice.map(m=>[m.mouse_id,m]));
+ const mice=data.mice.filter(m=>(!Array.isArray(cfg.scope_mouse_ids)||cfg.scope_mouse_ids.includes(m.mouse_id))&&(!Array.isArray(cfg.scope_experiments)||cfg.scope_experiments.includes(m.experiment))&&(!cfg.experiment||m.experiment===cfg.experiment)&&(!cfg.weeks||m.weeks===cfg.weeks));const byId=new Map(mice.map(m=>[m.mouse_id,m]));
  const records=data.measurements.filter(r=>r.metric_id===Number(cfg.metric)&&byId.has(r.mouse_id)&&(!cfg.replicate||r.replicate===cfg.replicate)&&(cfg.type==='line'||!cfg.timepoint||r.timepoint===cfg.timepoint));
- let groups=[...new Set(mice.map(m=>m[cfg.grouping]||'미기재'))];groups=groups.filter(g=>cfg.styles?.[g]?.include!==false).sort((a,b)=>(cfg.styles?.[a]?.order??0)-(cfg.styles?.[b]?.order??0));
+ let groups=[...new Set(mice.map(m=>m[cfg.grouping]||'Not specified'))];groups=groups.filter(g=>cfg.styles?.[g]?.include!==false).sort((a,b)=>(cfg.styles?.[a]?.order??0)-(cfg.styles?.[b]?.order??0));
  const times=cfg.type==='line'?[...new Set(records.map(r=>r.timepoint))].sort((a,b)=>Number(a)-Number(b)):[cfg.timepoint||'endpoint'];
  if(cfg.type==='line'&&times.some(t=>t.trim()===''||!Number.isFinite(Number(t))))throw Error('Time courses require numeric timepoints (e.g. 0, 15, 30, 60, 120).');
  const summaries=[];
- for(const g of groups)for(const tp of times){const roster=mice.filter(m=>(m[cfg.grouping]||'미기재')===g),ids=new Set(roster.map(m=>m.mouse_id));const rows=records.filter(r=>ids.has(r.mouse_id)&&(cfg.type!=='line'||r.timepoint===tp));const active=rows.filter(r=>!byId.get(r.mouse_id).excluded&&r.value!==null);if(new Set(active.map(r=>r.mouse_id)).size!==active.length)throw Error('Multiple replicates of a mouse are mixed. Select one replicate.');const missing=roster.filter(m=>!m.excluded&&!active.some(r=>r.mouse_id===m.mouse_id)).length;
+ for(const g of groups)for(const tp of times){const roster=mice.filter(m=>(m[cfg.grouping]||'Not specified')===g),ids=new Set(roster.map(m=>m.mouse_id));const rows=records.filter(r=>ids.has(r.mouse_id)&&(cfg.type!=='line'||r.timepoint===tp));const active=rows.filter(r=>!byId.get(r.mouse_id).excluded&&r.value!==null);if(new Set(active.map(r=>r.mouse_id)).size!==active.length)throw Error('Multiple replicates of a mouse are mixed. Select one replicate.');const missing=roster.filter(m=>!m.excluded&&!active.some(r=>r.mouse_id===m.mouse_id)).length;
  const present=new Set(rows.map(r=>r.mouse_id));const missing_values=roster.filter(m=>!m.excluded&&present.has(m.mouse_id)&&!active.some(r=>r.mouse_id===m.mouse_id)).length;
  summaries.push({group:g,timepoint:tp,...stats(active.map(r=>r.value)),missing,missing_values,unmeasured:missing-missing_values,excluded:roster.filter(m=>m.excluded).length,rows});}
  const coverage={measured:[],missing:[],unmeasured:[],excluded:[]};
- for(const mouse of mice.filter(m=>groups.includes(m[cfg.grouping]||'미기재'))){const rows=records.filter(r=>r.mouse_id===mouse.mouse_id);coverage[mouse.excluded?'excluded':rows.some(r=>r.value!==null)?'measured':rows.length?'missing':'unmeasured'].push(mouse.mouse_id);}
+ for(const mouse of mice.filter(m=>groups.includes(m[cfg.grouping]||'Not specified'))){const rows=records.filter(r=>r.mouse_id===mouse.mouse_id);coverage[mouse.excluded?'excluded':rows.some(r=>r.value!==null)?'measured':rows.length?'missing':'unmeasured'].push(mouse.mouse_id);}
  return {groups,times,summaries,byId,records,coverage};
 }
 function sampleRows(data,cfg){
  const records=data.measurements.filter(r=>r.metric_id===Number(cfg.metric)&&(!cfg.replicate||r.replicate===cfg.replicate)&&(cfg.type==='line'||!cfg.timepoint||r.timepoint===cfg.timepoint));
  const byMouse=new Map();for(const row of records){if(!byMouse.has(row.mouse_id))byMouse.set(row.mouse_id,[]);byMouse.get(row.mouse_id).push(row);}
- return data.mice.filter(m=>(!cfg.experiment||m.experiment===cfg.experiment)&&(!cfg.weeks||m.weeks===cfg.weeks)).map(mouse=>({mouse,rows:byMouse.get(mouse.mouse_id)||[]}));
+ return data.mice.filter(m=>(!Array.isArray(cfg.scope_mouse_ids)||cfg.scope_mouse_ids.includes(m.mouse_id))&&(!Array.isArray(cfg.scope_experiments)||cfg.scope_experiments.includes(m.experiment))&&(!cfg.experiment||m.experiment===cfg.experiment)&&(!cfg.weeks||m.weeks===cfg.weeks)).map(mouse=>({mouse,rows:byMouse.get(mouse.mouse_id)||[]}));
 }
 function sampleTree(data,configs,{query='',showMissing=false}={}){
  const all=new Map(),q=query.trim().toLowerCase(),sort=(a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true});
  configs.forEach((cfg,index)=>sampleRows(data,cfg).forEach(s=>{if(!all.has(s.mouse.mouse_id))all.set(s.mouse.mouse_id,{mouse:s.mouse,panels:[]});all.get(s.mouse.mouse_id).panels.push({index,rows:s.rows});}));
  const experiments=new Map();
  for(const sample of all.values()){
-  const m=sample.mouse,experiment=m.experiment||'Exp 미기재',diet=m.diet||m.group_name||'Diet 미기재';
+  const m=sample.mouse,experiment=m.experiment||'Exp not specified',diet=m.diet||m.group_name||'Diet not specified';
   if(!showMissing&&!sample.panels.some(p=>p.rows.length))continue;
   if(q&&![experiment,diet,m.group_name,m.mouse_id].join(' ').toLowerCase().includes(q))continue;
   if(!experiments.has(experiment))experiments.set(experiment,new Map());
