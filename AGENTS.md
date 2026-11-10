@@ -379,3 +379,7 @@ Top navigation uses the same bold font weight in active and inactive states, wit
 
 ### Metric label overflow
 Graph-card and sidebar metric buttons now constrain long labels to their available width with ellipsis. Full label text remains in the DOM for accessibility and is also exposed through a title tooltip; the selection popup remains unchanged. Graph data and rendered/exported scientific titles are not abbreviated by this CSS.
+
+
+### Data roster download correction
+Removed the Data page's obsolete Original roster link to /api/source/seed, which is deliberately unavailable in hosted mode. Replaced it with explicitly labeled Mouse roster CSV, exporting the current loaded roster (ID, Exp, group, diet, weeks, notes, exclusion, version) through the existing escaped/BOM CSV helper. It is not presented as an original uploaded spreadsheet. Original source downloads remain under Original uploaded files. Hosted seed restrictions and production data are unchanged; code not deployed.
