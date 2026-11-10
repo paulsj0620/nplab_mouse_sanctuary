@@ -438,3 +438,11 @@ Removed the Data page's obsolete Original roster link to /api/source/seed, which
 - 사용자 재확인에 따라 전역 제외에 그치지 않고 QA-001~004, QA-UI-001~002 및 측정값 24개를 현행 mice/measurements에서 제거했다.
 - 삭제 전 전체 행과 업로드 연결/상태를 qa_retired_data JSON에 보존. QA 전용 업로드는 남은 관측값/roster 연결이 없을 때만 archived로 표시, 원본 바이트는 유지. 변경 이력 기록.
 - 현행 mice 183, measurements 16,200. snapshot에서 QA mouse/관측값 0 확인. 연구 측정값 전체와 계정이 변경되지 않았으며 외래키 검사 통과. 운영 서버 변경 없음.
+
+### 2026-11-10 — 운영 데이터 직접 교체 및 CI 테스트 수정
+- 사용자 승인 범위: 기존 운영 연구 데이터를 정리된 통합 데이터로 교체, GitHub에는 데이터 업로드하지 않음. SSH nplab_actions 키로 직접 전송. 계정/비밀번호는 보존.
+- 운영 기존 183마리·2,236관측값을 retired_research_data 압축 JSON에 보관하고 현행 관측값을 통합 파일 ready 9,374개로 교체. 개발에서 중복으로 제외한 128개도 새 데이터에 포함. 연구 roster 183, QA 0, active source upload 1. 기존 원본 uploads는 archived 상태로 바이트 보존. 계정 10개 전체 행 변경 없음.
+- 통합 Excel SHA256 904cc63cfdc2312275da423c4702dfe2ca8c85cd33c790c61eccb0ad31965df8. 239개 사용 metric, review 5,821 및 missing 16은 입력 보류하고 원본 workbook에 보존. 개발의 연구 mouse 제외 상태는 roster와 함께 유지. 미검토 strategy image 101개와 원본 source를 이전했으나 UI의 제외 규칙/승인 조건은 그대로 적용되며 새 코드 배포 후 표시 가능.
+- 운영 교체 전 롤백 검증 후 단일 트랜잭션 적용, foreign_key/integrity 검사 및 snapshot 183/9,374 확인. 전송 패키지에는 계정/세션 테이블 없음. 임시 원격 전송 파일 제거. 운영 DB 전체 덮어쓰기/자동 SMB 백업 없음.
+- 66dff2a Actions test 실패를 로컬 동일 명령으로 재현: test_i18n.cjs 가상 document에 addEventListener가 없었음. 이벤트 listener/dispatch 및 Event.type을 보완. Python 30개, JS 26개 통과; code-only deploy package preview 통과. Node20 메시지는 경고이며 재현된 실패 원인이 아님.
+- 수정된 테스트는 아직 커밋/푸시하지 않음. 자동 배포는 수정본 push 후 재시도 필요. 데이터 반영과 코드 배포는 별개.
