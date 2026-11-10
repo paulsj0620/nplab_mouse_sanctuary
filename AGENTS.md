@@ -383,3 +383,58 @@ Graph-card and sidebar metric buttons now constrain long labels to their availab
 
 ### Data roster download correction
 Removed the Data page's obsolete Original roster link to /api/source/seed, which is deliberately unavailable in hosted mode. Replaced it with explicitly labeled Mouse roster CSV, exporting the current loaded roster (ID, Exp, group, diet, weeks, notes, exclusion, version) through the existing escaped/BOM CSV helper. It is not presented as an original uploaded spreadsheet. Original source downloads remain under Original uploaded files. Hosted seed restrictions and production data are unchanged; code not deployed.
+
+
+### 2026-11-10 Localized file controls and MASLD consolidation draft
+- Native file input labels followed the OS language. Added localized visible labels around the original focusable inputs for summary and QA uploads, preserving accept/multiple/validation and native file selection. English/Korean switching, multiple filenames and explicit reset verified in a temporary browser with mocked API responses; no real upload/account change. Production not deployed.
+- User authorized a consolidated workbook using Mouse-info.xlsx as authoritative roster: exactly IDs 1–183. User confirmed both Liver T Cell/Treg Count and Neutrophil counts are calculated Absolute Count, cells/µL.
+- Added scripts/imports/polish_masld.py: read-only source extraction, exact-identity deduplication, source-cell provenance, percent-format normalization, explicit missing/zero distinction and review holds for uncertain IDs/units/dates/annotations. Original file SHA-256 checked unchanged. Does not connect to or write any DB.
+- Exp 5/9 Gut sheets contain 540 duplicated measurements; all source locations retained. Copied material rosters in Exp 4/7/8/10 prevent reliable Pyret-ID mapping. Exp 13 outside the authoritative roster stays review-only. Do not infer IDs from row order or silently repair date years.
+- Consolidated workbook is a review draft, NOT a file to import blindly through the current generic Import mapping. Long-format workbook import still needs integration after review. No production upload, backup, commit or push performed.
+
+## 2026-11-10 — Gating 이미지 표시 복구
+- Gating은 Graph와 독립된 탭. 원시 FACS의 QA 제한은 그대로 유지한다.
+- 빈 화면 원인: 개발 서버가 변경 전 프로세스로 실행 중이었고 strategy 테이블/이미지가 미등록. com.mouselab.server를 재시작했다.
+- masld_projectdata의 11개 XLSX 원본 바이트를 개발 DB strategy_sources에 보존하고 이미지 101개 occurrence를 strategy_images에 pending으로 등록했다. 미리보기 가능한 PNG/JPEG 10개가 목록에서 먼저 나온다. EMF/WDP 등은 원본 다운로드 안내를 표시하며 변환 지원으로 오인하지 않는다.
+- 관리자만 미검토 이미지와 연결 정보 검토/승인을 볼 수 있다. 일반 사용자에게는 approved만 표시된다. Exp/organ/panel을 자동으로 확정하지 않았다.
+- 등록 전후 기존 테이블 비교에서 events만 변경됐으며 측정값/계정은 변경되지 않았다. 원본 파일도 변경하지 않았다.
+- Git에는 코드만 포함. data/, archives/, masld_projectdata/, outputs/ 연구자료는 제외. 운영용 데이터는 별도 인증된 직접 업로드를 사용하고 이번 작업에서는 운영 업로드/배포를 수행하지 않았다.
+- strategy 단위검증, FCS 접근제어, 보안 회귀검증 총 13개 통과. 개발 서버 strategies.js 응답 200, 비로그인 API는 로그인 요구 확인.
+
+### 2026-11-10 — Gating 화면 높이와 설정 배치
+- 이미지 목록 / 전체 이미지 / 오른쪽 설정의 3열로 정리. 필터는 기본 펼침, 업로드·검토·원본 정보는 접이식으로 표시한다.
+- 화면의 남은 높이에 맞추고 목록·설정은 각각 스크롤한다. 기본 이미지는 가로/세로 모두 맞춤, 확대 시 이미지 영역 내부만 스크롤한다.
+- 긴 Zoom 슬라이더를 오른쪽 위 − / 비율 / + / Fit 버튼으로 교체. 이미지 선택 시 화면 맞춤으로 복귀한다.
+- Chrome에서 1920×927 및 1920×1080 이미지/사이드바 하단과 이미지 너비가 영역 안에 들어가는지 검증. 확대·Fit·새로고침 복원 및 브라우저 오류 없음 확인.
+- 프런트엔드만 수정. DB·원본·운영 배포 변경 없음.
+
+### 2026-11-10 — Gating 목록 유지 및 드래그 이동
+- 이미지 선택 등 재렌더 시 왼쪽 목록과 오른쪽 설정의 scrollTop을 복원한다.
+- 확대 이미지 영역은 pointer capture 기반 클릭 드래그로 이동. 기본 브라우저 이미지 드래그를 막고 grab/grabbing 커서 제공. Fit 시 스크롤 원점 복귀, pointer cancel/capture 해제 처리.
+- Chrome에서 30개 항목 목록의 스크롤 후 선택 위치 보존, 확대 후 X/Y 드래그 이동, 해제 및 Fit 복귀, 새로고침 확인. JS 문법 및 브라우저 오류 없음.
+- 개발 DB 원본 이미지 SHA-256 읽기 전용 검사: 101 occurrence, 96 unique bytes. 미리보기 10 occurrence/7 unique. 내용 유사성 검사는 아니며 모든 이미지가 gating strategy라고 확정한 것이 아니다. 중복 원본/출처 삭제 없음, DB 수정/운영 배포 없음.
+
+### 2026-11-10 — Unmapped media 목록 제외
+- 사용자 요청으로 Gating 카탈로그 표시 시 anchor가 `Unmapped media;`로 시작하는 항목을 관리자/일반 사용자 모두 제외한다. 필터 옵션·이전/다음·총 개수에도 포함하지 않는다. 이후 업로드에도 같은 표시 규칙 적용.
+- 현재 개발 DB 101개 중 48개 제외하여 53개 표시. 원본 Excel·이미지·검토 이력과 DB 레코드는 삭제하지 않았다. 운영 배포 없음.
+
+### 2026-11-10 — Metabolic 이미지 목록 제외
+- Gating 표시에서 `Metabolic Biochemical outcomes` 시트도 제외. 대소문자 및 공백 차이를 정규화하며 향후 업로드에도 적용한다. 기존 Unmapped media 제외와 함께 목록·필터·개수에 반영.
+- 현재 53개 중 41개 추가 제외, 12개 표시. 원본 및 DB 변경 없음. 운영 배포 없음.
+
+### 2026-11-10 — Neutrophil 제외 및 메뉴 순서
+- Gating 표시에서 Neutrophil panels도 제외. 기존 제외 규칙과 합쳐 현재 7개 표시, 원본·DB 보존.
+- 메뉴를 Home → FACS → Gating → Import → Data → Graph → Edit History → User management로 정렬. 기존 FACS QA 접근 제한 및 관리자 메뉴 표시 조건 유지. 운영 배포 없음.
+
+### 2026-11-10 — 개발용 통합 데이터 테스트 Import
+- 명시적 사용자 요청으로 QA-001~004, QA-UI-001~002를 전역 제외 처리(삭제 아님). 기존 연구 mouse 제외 상태는 유지, 따라서 roster 총 189는 보존된다.
+- `scripts/imports/import_consolidated.py`: 기본 dry-run 전체 트랜잭션 롤백, --apply는 정확한 개발 DB 경로만 허용. 통합 XLSX를 읽고 원본 바이트 및 provenance를 upload에 보존. 파일 해시 기반 중복 실행 차단, 기존 관측값 충돌은 보류. 단위/숫자/roster 검증, 사용자 및 각 변경 audit 기록.
+- 통합 workbook SHA256 904cc63cfdc2312275da423c4702dfe2ca8c85cd33c790c61eccb0ad31965df8. 183마리 Exp/diet/weeks 갱신, diet 설명·feeding schedule·원래 group 등은 source metadata에 보존. 기존 표시 group_name은 유지.
+- ready 9,374 중 기존 동일 키/값 128 건너뜀, 9,246 추가. review 5,821 및 missing 16은 원본 workbook에 보존하고 입력 보류. MFI Geometric Mean은 기존 명명 방식 Geometric Mean으로 정규화, 형광강도에 분모 비해당 명시. panel/전체 gate 경로 및 원본 header 보존.
+- 기존 6,978 관측값·계정 전체가 변경되지 않았음을 확인. 최종 관측값 16,224, metric 317. SQLite integrity/foreign_key_check 통과, snapshot에 신규 9,246 노출 확인.
+- 상세 보고서 data/consolidated-test-import-report.json (Git 제외). 연구 데이터·원본은 Git에 올리지 않음. 운영 접속·배포·데이터 업로드 수행하지 않음. 자동 백업은 실행하지 않음.
+
+### 2026-11-10 — QA 6마리 현행 데이터에서 보관 처리
+- 사용자 재확인에 따라 전역 제외에 그치지 않고 QA-001~004, QA-UI-001~002 및 측정값 24개를 현행 mice/measurements에서 제거했다.
+- 삭제 전 전체 행과 업로드 연결/상태를 qa_retired_data JSON에 보존. QA 전용 업로드는 남은 관측값/roster 연결이 없을 때만 archived로 표시, 원본 바이트는 유지. 변경 이력 기록.
+- 현행 mice 183, measurements 16,200. snapshot에서 QA mouse/관측값 0 확인. 연구 측정값 전체와 계정이 변경되지 않았으며 외래키 검사 통과. 운영 서버 변경 없음.

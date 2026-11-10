@@ -61,7 +61,7 @@ class Handler(BaseHTTPRequestHandler):
         try:n=int(self.headers.get('Content-Length','0'))
         except ValueError:raise Problem('Invalid request length')
         path=urlparse(self.path).path
-        limit=15*1024*1024 if path=='/api/upload' else (16384 if path in ('/api/login','/api/setup') else 2*1024*1024)
+        limit=15*1024*1024 if path in ('/api/upload','/api/strategies/upload') else (16384 if path in ('/api/login','/api/setup') else 2*1024*1024)
         if n<=0 or n>limit:raise Problem('Check the request size.',413)
         try:d=json.loads(self.rfile.read(n))
         except Exception:raise Problem('Invalid JSON')
@@ -73,7 +73,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.server.hosted and (path in ('/api/setup','/api/source/seed') or path.startswith('/api/fcs/')):
             raise Problem('Not available on this site.',404)
         if self.command=='GET' and not path.startswith('/api/'):
-            files={'/':'index.html','/app.js':'app.js','/i18n.js':'i18n.js','/study.js':'study.js','/chart.js':'chart.js','/style.css':'style.css','/fcs.js':'fcs.js','/mouse-cemetery.png':'mouse-cemetery.png'}
+            files={'/':'index.html','/app.js':'app.js','/i18n.js':'i18n.js','/study.js':'study.js','/chart.js':'chart.js','/style.css':'style.css','/fcs.js':'fcs.js','/strategies.js':'strategies.js','/mouse-cemetery.png':'mouse-cemetery.png'}
             if path not in files:raise Problem('Not found.',404)
             p=ROOT/'static'/files[path];return self.respond(200,p.read_bytes(),mimetypes.guess_type(p.name)[0]+('' if p.suffix=='.png' else '; charset=utf-8'))
         if self.command=='GET' and path=='/api/me':
@@ -112,11 +112,17 @@ class Handler(BaseHTTPRequestHandler):
                 if len(body)!=length:raise Problem('Incomplete upload chunk.',400)
                 offset=int(parse_qs(urlparse(self.path).query).get('offset',['-1'])[0])
                 return self.respond(200,self.server.fcs.append(path.rsplit('/',1)[1],user['id'],offset,body))
-            if self.command=='POST' and path in ('/api/upload','/api/preview','/api/import/review','/api/import'):
+            if self.command=='POST' and path in ('/api/upload','/api/preview','/api/import/review','/api/import','/api/strategies/upload'):
                 if not self.server.import_slot.acquire(blocking=False):
                     raise Problem('Another import is being processed. Please try again shortly.',503)
                 try:
                     d=self.body()
+                    if path=='/api/strategies/upload':
+                        import base64,binascii
+                        with store.db() as c:self.server.strategies.admin(c,user['id'])
+                        try:raw=base64.b64decode(d.get('content',''),validate=True)
+                        except (ValueError,TypeError,binascii.Error):raise Problem('Invalid workbook content.')
+                        return self.respond(201,self.server.strategies.ingest(d.get('filename',''),raw,user['id']))
                     if path=='/api/upload':return self.respond(201,store.stage(d.get('filename'),d.get('content'),user['id']))
                     if path=='/api/preview':return self.respond(200,store.preview(d.get('upload_id'),user['id'],d.get('sheet')))
                     if path=='/api/import/review':return self.respond(200,store.review_import(d.get('upload_id'),d.get('mapping',{}),user['id']))
@@ -124,6 +130,11 @@ class Handler(BaseHTTPRequestHandler):
                 finally:self.server.import_slot.release()
             d=self.body()
         if self.command=='GET':
+            if path=='/api/strategies':return self.respond(200,self.server.strategies.catalog(user,parse_qs(urlparse(self.path).query).get('review',['0'])[0]=='1'))
+            if path.startswith('/api/strategies/'):
+                parts=path.split('/')
+                if len(parts)!=5 or parts[4] not in ('preview','original','workbook'):raise Problem('Not found.',404)
+                body,mime,download=self.server.strategies.source(parts[3],user,parts[4]);return self.respond(200,body,mime,download=download)
             if path=='/api/experiments':
                 from scripts.app.experiments import workspace
                 return self.respond(200,workspace(store,parse_qs(urlparse(self.path).query).get('experiment',[''])[0],fcs_allowed(user)))
@@ -172,6 +183,16 @@ class Handler(BaseHTTPRequestHandler):
                 if ext not in ('.xlsx','.xls','.csv'):ext='.bin'
                 return self.respond(200,u['original'],'application/octet-stream',download='source-'+uid+ext)
         if self.command=='POST':
+            if path=='/api/strategies/extract':
+                with store.db() as c:
+                    self.server.strategies.admin(c,user['id'])
+                    source=c.execute("SELECT filename,original FROM uploads WHERE id=? AND status='committed'",(str(d.get('upload_id','')),)).fetchone()
+                if not source:raise Problem('Committed workbook not found.',404)
+                if not self.server.import_slot.acquire(blocking=False):raise Problem('Another import is running.',503)
+                try:return self.respond(201,self.server.strategies.ingest(source['filename'],source['original'],user['id']))
+                finally:self.server.import_slot.release()
+            if path.startswith('/api/strategies/'):
+                return self.respond(200,self.server.strategies.review(path.rsplit('/',1)[1],d,user))
             if path=='/api/fcs/experiment-link':
                 from scripts.app.experiments import link_file
                 return self.respond(200,link_file(store,d,user['id']))
@@ -263,9 +284,13 @@ def make_server(host,port,db,secure=False,allowed_networks=(),*,hosted=False):
     server.login_limiter=LoginLimiter();server.import_slot=threading.BoundedSemaphore(1)
     if hosted:
         server.store = Store(db, existing_only=True)
+        from scripts.app.strategies import StrategyLibrary
+        server.strategies=StrategyLibrary(server.store)
         return server
     seed = ROOT/'archives/seed/roster.json'
     server.store=Store(db, seed if seed.is_file() else None)
+    from scripts.app.strategies import StrategyLibrary
+    server.strategies=StrategyLibrary(server.store)
     from scripts.fcs.fcs_storage import FCSLibrary
     server.fcs=FCSLibrary(server.store)
     original_close=server.server_close

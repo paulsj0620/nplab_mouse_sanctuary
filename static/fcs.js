@@ -36,7 +36,7 @@ fcsEl('fcs-upload').onclick=async()=>{
   fcsEl('fcs-upload-status').textContent=file.name+': verifying original and local mirror…';
   await api('/fcs/finish','POST',{id:transfer.id});localStorage.removeItem(key);
  }
- fcsEl('fcs-upload-status').textContent=`${files.length} original file(s) preserved and available to QA accounts.`;fcsEl('fcs-files').value='';await fcsRefresh();
+ fcsEl('fcs-upload-status').textContent=`${files.length} original file(s) preserved and available to QA accounts.`;fcsEl('fcs-files').value='';window.refreshFileControls?.();await fcsRefresh();
  }catch(e){fcsEl('fcs-upload-status').textContent=e.message+' Original files on your computer are unchanged. Reselect the same file to resume.'}
  finally{fcsBusy=false;fcsEl('fcs-upload').disabled=false}
 };

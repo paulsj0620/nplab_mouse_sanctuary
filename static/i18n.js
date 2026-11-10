@@ -14,6 +14,17 @@ const attrs=[];document.querySelectorAll('[placeholder],[aria-label],[title]').f
 function apply(){if(running)return;running=true;for(const [node,record] of records){if(!node.isConnected){records.delete(node);continue;}if(node.textContent!==record.last){record.source=node.textContent;}const key=record.source.trim();record.last=record.source.replace(key,t(key));if(node.textContent!==record.last)node.textContent=record.last;}
  for(const item of attrs)if(item.el.isConnected)item.el.setAttribute(item.attr,t(item.source));
  document.documentElement.lang=lang;document.querySelector('#language-select').value=lang;running=false;}
+// Keep the real file input for keyboard access and native file selection.
+const fileControls=[...document.querySelectorAll('input[type="file"]')].map(input=>{
+ const shell=document.createElement('span');shell.className='localized-file-control';
+ const action=document.createElement('span');action.className='file-control-action';action.setAttribute('aria-hidden','true');
+ const status=document.createElement('span');status.className='file-control-status';status.setAttribute('aria-hidden','true');status.dataset.original='';
+ input.before(shell);shell.append(input,action,status);
+ const update=()=>{const files=[...input.files];action.textContent=lang==='ko'?'파일 선택':'Choose file';const name=files.length?files.map(f=>f.name).join(', '):(lang==='ko'?'선택된 파일 없음':'No file selected');status.textContent=name;status.title=name;};
+ input.addEventListener('change',update);input.addEventListener('cancel',update);update();return update;
+});
+window.refreshFileControls=()=>fileControls.forEach(update=>update());
+document.addEventListener('languagechange',window.refreshFileControls);
 function reason(s){const canonical=historyEnglish[s]||s;return t(canonical);}
 window.I18n={t,reason,get language(){return lang;}};
 document.querySelector('#language-select').onchange=e=>{lang=e.target.value;try{localStorage.setItem('mouse-sanctuary-language',lang);}catch(_){}apply();document.dispatchEvent(new Event('languagechange'));};

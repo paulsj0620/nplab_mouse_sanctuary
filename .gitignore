@@ -33,3 +33,7 @@ __pycache__/
 archives/
 
 config/backup.json
+
+# Research consolidation and strategy assets: never deploy through Git
+masld_projectdata/
+outputs/

@@ -484,7 +484,7 @@ function selectImportKind(kind){
  importDrafts[importKind]={stage,markup:$('#mapping').innerHTML,controls:[...$('#mapping').querySelectorAll('input,select,textarea')].map(el=>({value:el.value,checked:el.checked}))};
  importFieldError('#file','#import-file-error','');importKind=kind;const draft=importDrafts[kind];stage=draft?.stage||null;$('#mapping').innerHTML=draft?.markup||emptyImportMarkup;
  if(draft)[...$('#mapping').querySelectorAll('input,select,textarea')].forEach((el,i)=>{el.value=draft.controls[i].value;if(el.type==='checkbox')el.checked=draft.controls[i].checked;});
- $('#mapping').hidden=!stage;$('#file').value='';$('#sheet').onchange=changeImportSheet;invalidateImportReview();$('#validate-import').onclick=validateImport;$('#commit-import').onclick=commitImport;renderImportKind();
+ $('#mapping').hidden=!stage;$('#file').value='';window.refreshFileControls?.();$('#sheet').onchange=changeImportSheet;invalidateImportReview();$('#validate-import').onclick=validateImport;$('#commit-import').onclick=commitImport;renderImportKind();
 }
 for(const button of document.querySelectorAll('[data-import-kind]')){button.onclick=()=>selectImportKind(button.dataset.importKind);button.onkeydown=e=>{if(['ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();selectImportKind(importKind==='meta'?'facs':'meta');document.querySelector('[data-import-kind="'+importKind+'"]').focus()}}}
 renderImportKind();
@@ -507,7 +507,7 @@ $('#file').onchange=async e=>{
   stage.display_filename=file.name;showMapping();renderImportKind();
   notice('Review the preview and select columns to import. Measurements have not been saved yet.');
  }catch(error){
-  stage=null;$('#mapping').hidden=true;renderImportKind();$('#file').value='';
+  stage=null;$('#mapping').hidden=true;renderImportKind();$('#file').value='';window.refreshFileControls?.();
   importFieldError('#file','#import-file-error',file.name+' — '+error.message);
  }finally{busy=false}
 };
@@ -593,7 +593,7 @@ async function commitImport(){
  try{const mapping=importMapping();if(importReview.uid!==stage.upload_id||importReview.signature!==JSON.stringify(mapping)){invalidateImportReview();return}
  busy=true;$('#commit-import').disabled=true;
  const result=await api('/import','POST',{upload_id:stage.upload_id,mapping,reason:$('#import-reason').value,review_token:importReview.token});
- stage=null;importReview=null;importDrafts[importKind]=null;$('#import-reason').value='';renderImportKind();$('#mapping').hidden=true;$('#file').value='';if(example)switchExample(false);await sync(true);notice(`Saved ${result.new_mice} new mice and ${result.measurements} measurements.`)
+ stage=null;importReview=null;importDrafts[importKind]=null;$('#import-reason').value='';renderImportKind();$('#mapping').hidden=true;$('#file').value='';window.refreshFileControls?.();if(example)switchExample(false);await sync(true);notice(`Saved ${result.new_mice} new mice and ${result.measurements} measurements.`)
  }catch(e){invalidateImportReview();$('#import-validation').classList.add('has-errors');$('#import-validation').textContent=e.message;$('#import-validation').scrollIntoView({block:'nearest'})}finally{busy=false;$('#commit-import').disabled=!importReview}
 };
 $('#commit-import').onclick=commitImport;

@@ -19,12 +19,12 @@ SSH = "nplab@ssh-nplab.alwaysdata.net"
 FILES = (
     "build.json",
     "scripts/__init__.py", "scripts/paths.py", "scripts/app/__init__.py",
-    "scripts/app/server.py", "scripts/app/service.py", "scripts/app/security.py", "scripts/app/experiments.py",
+    "scripts/app/server.py", "scripts/app/service.py", "scripts/app/security.py", "scripts/app/experiments.py", "scripts/app/strategies.py",
     "scripts/imports/__init__.py", "scripts/imports/facs.py", "scripts/imports/histology.py",
     "scripts/imports/validation.py", "scripts/statistics/__init__.py",
     "scripts/statistics/statistical.py", "requirements/requirements.txt",
     "static/index.html", "static/app.js", "static/chart.js", "static/i18n.js",
-    "static/study.js", "static/fcs.js", "static/style.css", "static/mouse-cemetery.png",
+    "static/strategies.js", "static/study.js", "static/fcs.js", "static/style.css", "static/mouse-cemetery.png",
 )
 LIMIT = 16 * 1024 * 1024
 START = "/home/nplab/mouse-sanctuary/.venv/bin/python -m scripts.app.server --alwaysdata"
