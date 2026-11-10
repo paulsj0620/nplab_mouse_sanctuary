@@ -88,24 +88,29 @@
 
 .controls {
   display:flex;flex-direction:column;max-height:calc(100dvh - 40px);overflow:hidden;
-  padding:8px;border:1px solid #aaa;border-radius:6px;background:#eee;
+  padding:8px;border:.5px solid #ccc;border-radius:6px;background:#eee;
 }
 .graph-control-menu {display:grid;flex:none;gap:4px}
 .graph-control-menu button {
-  display:block;text-align:left;padding:9px 12px;border:1px solid #bdbdbd;border-radius:3px;
+  display:block;text-align:left;padding:9px 12px;border:.5px solid #d2d2d2;border-radius:3px;
   background:#fafafa;color:#222;font-size:16px;line-height:1.35;font-weight:700;
 }
 .graph-control-menu button:hover {background:#e8e8e8}
 .graph-control-menu button:focus-visible {outline:2px solid #444;outline-offset:-3px}
 .graph-control-menu button::before {content:'▸';display:inline-block;width:1.2em;color:#666}
-.graph-control-menu button[aria-expanded="true"] {background:#dadada;border-color:#888}
+.graph-control-menu button[aria-expanded="true"] {background:#e5e5e5;border-color:#bbb}
 .graph-control-menu button[aria-expanded="true"]::before {content:'▾'}
 .graph-control-body {
   min-height:0;overflow-y:auto;overscroll-behavior:contain;margin-top:8px;
-  padding:12px;border:1px solid #bbb;border-radius:3px;background:white;
+  padding:12px;border:.5px solid #d2d2d2;border-radius:3px;background:white;
 }
 .graph-control-body .sample-list {max-height:none;overflow:visible}
 
 #guest-start {width:100%;margin-top:16px}
-#guest-banner {margin:16px 32px;padding:12px;border:1px solid #bbb;background:#f4f4f4}
+#guest-banner {margin:16px 32px;padding:12px;border:.5px solid #d2d2d2;background:#f4f4f4}
 #guest-banner span {display:block;margin:6px 0}
+
+#graph-tabs {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;margin-bottom:4px}
+#graph-tabs button {text-align:center;padding:6px 2px;font-size:12px;font-weight:600}
+#graph-tabs button::before {content:none}
+#graph-tabs button[aria-selected="true"] {background:#444;color:white;border-color:#444}
