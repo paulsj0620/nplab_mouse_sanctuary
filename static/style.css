@@ -105,3 +105,7 @@
   padding:12px;border:1px solid #bbb;border-radius:3px;background:white;
 }
 .graph-control-body .sample-list {max-height:none;overflow:visible}
+
+#guest-start {width:100%;margin-top:16px}
+#guest-banner {margin:16px 32px;padding:12px;border:1px solid #bbb;background:#f4f4f4}
+#guest-banner span {display:block;margin:6px 0}

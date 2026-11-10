@@ -1,4 +1,22 @@
-# Mouse Lab — 작업 인계 및 유지보수 지침
+# 현재 우선 지침 — 2026-11-09 폴더 정리
+
+## 문서 위치와 정리 기준
+
+- `README.md`와 `AGENTS.md`는 이 프로젝트 루트에 둔다. `WorkInProgress` 최상단에는 공통 README·AGENTS 등 Markdown 안내 파일을 다시 만들지 않는다.
+- README는 사람이 읽는 목적·흐름·현재 결과·실행 위치 안내이고, AGENTS는 AI 작업 지침이다. 날짜별 과거 기록과 현재 지침을 구분한다.
+- 별도 `_maintenance` 폴더를 만들지 않는다. 핵심 정리 내역은 기존 README나 작업 기록에 남긴다.
+- 이 웹앱은 사용자 지정 예외다. 전체 폴더 정리에서는 README·AGENTS만 정비하며 실행 구조, 코드, 설정, DB, 원본, 백업, 자동 실행 구성과 파일 위치를 유지한다.
+
+- 사용자는 **웹앱은 README·AGENTS만 정리하고 실행 구조를 유지**하도록 명시했다. 이번 전체 작업 공간 정리에서 이 프로젝트의 코드·설정·DB·원본·폴더·시작 파일·자동 실행·백업·배포는 변경하지 않는다.
+- [README.md](README.md)를 사람용 시작점으로 사용한다. 상세 기능·통계·보존·검증 원칙과 날짜별 이력은 아래에 유지한다. 과거 기록의 최초 설치 상태를 현재 상태로 혼동하지 않는다.
+- 운영은 `https://nplab.alwaysdata.net/`, Mac은 개발·검증용이라는 2026-11-06 기록이 최신 운영 설명이다. 이 문서 정비에서 원격 상태 확인이나 배포를 수행하지 않았다.
+- 실제 로컬 DB·업로드 자료가 존재한다. 초기 빈 데모로 가정하거나 기존 계정·연구 데이터를 초기화하지 않는다.
+- 자동 백업 중지 요청과 QA 전용 FACS 제한을 유지한다. 일반 Graph·FACS 요약 Import와 원시 FCS 분석 기능을 구분한다.
+- 커밋·푸시·배포와 서비스 재설정은 폴더 안내 문서 정비에 포함되지 않는다.
+
+---
+
+# Mouse Sanctuary — 작업 인계 및 유지보수 지침
 
 작성일: 2026-11-02 (Europe/Berlin)
 최종 저장 위치: /Users/paul/WorkInProgress/nplab_mouse_web
@@ -14,7 +32,7 @@
 - Python HTTP 서버 + SQLite 기반 계정 로그인, 관리자/편집 권한, 다중 사용자 업로드 및 수정. 버전 충돌은 409로 처리하여 다른 사용자의 변경을 덮어쓰지 않는다.
 - 고유 mouse ID, metric, timepoint, replicate로 관측값을 구분한다. 원본 업로드 바이트·해시를 보존하고 수정·제외·복원 이력을 남긴다.
 - XLS/XLSX/CSV Import, FlowJo XLS 다중 표 인식, 샘플명과 mouse ID 매핑 검토, 결측값과 실제 0 구분.
-- 4–8개 그래프를 2열로 표시. 각 그래프의 측정 항목/gate, 시점, 반복, 축 등을 선택한다.
+- 그래프는 1–8개까지 선택한다. 기본은 4개이며 여러 그래프는 2열로 표시한다. 각 그래프의 측정 항목/gate, 시점, 반복, 축 등을 선택한다.
 - 하나의 공통 패널에서 그룹 순서·표시·색상·점 기호·채움을 모든 그래프에 적용한다. ≡ 드래그 핸들과 방향키로 순서를 변경한다.
 - 오른쪽 샘플 창은 Exp → Diet → Mouse 계층이며 초기에는 접혀 있다. 검색 시 해당 경로를 펼친다.
 - 샘플 선택 변경을 모든 그래프에 즉시 미리보기로 반영한다. 사유를 입력하고 저장하면 mouse 전체에 전역 제외/복원이 적용된다. 취소하면 저장 전 상태로 돌아간다.
@@ -270,3 +288,38 @@ User observed sleep during scheduled hours. pmset logs confirm 09:00 job began d
 
 ## 2026-11-05 Admin Login History
 Added append-only login_history table (id, stable user_id if known, attempted username snapshot, outcome, UTC timestamp). Records successful/failed credential checks transactionally; failures commit before raising 401. HTTP rate-limited attempts record blocked. No password, token, IP or request body recorded. GET /api/login-history requires admin, returns newest 100 with cursor for older records. User management now contains bilingual Login History showing Europe/Berlin time; ordinary accounts denied server-side. Prior sessions are not backfilled and history is separate from data-edit revision. Three new unit/HTTP tests cover success/failure, unknown username, secrets absent, append-only, pagination, rename preservation, auth and rate limits. All 71 Python tests and i18n test passed; synthetic UI shows failed/successful attempts in both languages. Production records begin at deployment; research originals unchanged, no backup/commit/push.
+
+## 2026-11-06 Graph 화면과 운영 배포
+
+**개발과 운영.** 맥미니는 개발·검증용이며, 연구팀이 사용하는 운영 사이트는 [Mouse Sanctuary](https://nplab.alwaysdata.net/)다. 이전의 내부망 전용 기록은 11월 3일 당시 구성이다.
+
+### Graph 선택 및 표시
+
+- 그래프 수는 1–8개다. PNG와 SVG 내보내기는 빈 칸과 현재 조건에서 측정값이 없는 그래프를 건너뛰고 실제 그림만 배치한다. A–H 패널 문자는 원래 보드 위치를 따른다. 모두 비어 있거나 축 설정이 잘못되면 이유를 표시한다.
+- Metric 팝업은 현재 비교 대상에 실제 수치가 있는 항목만 제공한다. 0도 측정값이다. 대분류를 세로로 나열하고 선택한 행 오른쪽에 다음 단계를 표시한다. 열 너비는 고정한다.
+- Metabolic outcome은 Weight-timeline, Weight-endpoint, ITT, OGTT를 구분한다. Weight-timeline에서는 그룹별·주차별 체중의 평균선 또는 중앙값선을 선택할 수 있다. 초기값은 Off다. 전역 제외와 결측을 반영하며, 중앙값선을 선택해도 SD·SEM 오차 막대는 평균 기준이다.
+- Histology는 장기 다음에 측정 항목이 바로 나온다. 예를 들어 Liver에서 HE (%) 또는 PSR (%)를 누르면 그래프에 적용한다.
+- Flow cytometry는 장기 → 패널 → 마지막 gate 이름 → 측정 지표 순서다. 전체 gate 경로를 보존하며, 같은 장기·패널에 끝 이름이 중복될 때만 상위 경로를 덧붙인다. qPCR은 장기 → pathway → 유전자 순서다. Import에서 지정한 패널·pathway는 측정 항목 식별에 포함한다. 선택 경로와 저장 구조는 [Graph 분류 ERD](docs/database-erd.md#graph-metric-erd)를 참고한다.
+
+### 오른쪽 설정 패널
+
+- Comparison samples는 이번 그래프 보드의 비교 대상을 고른다. Global exclusions는 모든 지표에 적용할 마우스 제외·복원을 미리 보여주고, 사유와 함께 저장하면 다른 사용자에게도 적용되며 Edit History에 기록된다.
+- Comparison samples, Graph settings, Global exclusions, Graph formatting, Shared presets는 기본으로 접혀 있다. 한 번에 하나만 열고, 오른쪽 메뉴 제목은 고정한 채 내용만 스크롤한다. 메뉴 전환 시 입력 중인 제외 사유를 유지한다. 제목은 16px 볼드이며 열린 메뉴는 더 진한 회색으로 표시한다.
+
+### 배포 및 검증
+
+- 운영 배포 커밋은 `9059926`이다. 배포 전 Python 테스트 36개와 JavaScript 테스트 32개가 통과했다. 운영에서 HTML·JavaScript·CSS 5개 파일이 배포본과 일치하고 로그인 상태 조회가 정상 응답하는 것을 확인했다.
+- 두 개발 기기에서는 작업 시작 전 최신 main을 받는다. main에 푸시하면 GitHub Actions가 테스트 후 코드 전용 배포를 실행한다. 커밋 전 사용자에게 알리고, 운영 배포 요청 여부를 확인한다.
+- 배포에는 `scripts/deployment/alwaysdata.py`의 허용 목록을 사용한다. 운영 DB, 계정, 업로드 원본, archives는 배포 대상에서 제외한다. 배포 설정과 검증 절차는 [GitHub 배포 문서](docs/github-deployment.md)를 참고한다.
+
+## 2026-11-09 로컬 중복 사본 정리
+
+사용자 요청으로 `archives/MouseSanctuary/data/fcs/`의 동일 파일 103개(3,520,922,266 bytes)를 현재 `data/fcs/`의 보존본을 가리키는 상대 심볼릭 링크로 교체했습니다. 전체 SHA-256을 전후 확인했습니다. 완료된 staging 13개는 변경 가능한 staging 경로 대신 해시 이름의 immutable objects를 참조합니다. 현재 원본·DB·독립 백업·앱 코드는 변경하지 않았으며 배포하지 않았습니다.
+
+이전 `archives/MouseSanctuary/` 사본은 이제 독립 실행/이동용 완전 복사본이 아닙니다. 폴더만 따로 옮길 때는 링크 대상도 포함하거나 링크 대상의 내용을 실제 파일로 복사해야 합니다. 정리 기록과 자동 복원 스크립트가 있던 작업 공간의 `_maintenance/`는 같은 날 사용자 요청으로 삭제했습니다. 보존본과 상대 심볼릭 링크는 그대로 유지되며 삭제 후 모든 기존 링크의 대상이 존재하는지 확인했습니다.
+
+## 2026-11-10 Guest Graph preview
+
+로그인 화면의 Try Graph as a guest 버튼으로 브라우저 내 가상 데이터를 사용해 Graph를 체험한다. 예시는 48개 마우스의 FACS, 주차별 체중, Liver HE·PSR이다. 그래프 선택·서식·비교 샘플 필터·PNG/SVG/CSV 내보내기를 지원하며, 게스트 표시와 합성 데이터 표기를 유지한다. 게스트는 Graph 화면만 제공하며 서버 API 호출을 클라이언트에서 차단한다. 서버 인증 규칙은 기존 로직을 따른다. 로그인 화면으로 돌아가면 체험 상태를 초기화한다. 기존 예시 모드와 같이 p-value는 계산하지 않는다.
+
+브라우저에서 입장, 4개 그림, 샘플 제외·복원 필터, PNG, 서식, 종료를 검증했다. 첫 로그인 상태 확인인 /api/me 외에 API 요청이 발생하지 않았고 JavaScript 테스트 32개가 통과했다. 개발본에 반영했으며 이번 작업의 커밋·운영 배포는 보류했다. 작업 시작 시 저장소 전체에 기존 파일 모드 변경이 있었으므로 후속 커밋에서 이를 함께 포함하지 않도록 검토한다.
