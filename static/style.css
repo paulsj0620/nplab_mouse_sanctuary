@@ -320,3 +320,6 @@ html{scrollbar-gutter:stable}
 #strategy-dialog .strategy-image-stage.is-pannable{cursor:grab;touch-action:none;user-select:none}
 #strategy-dialog .strategy-image-stage.is-dragging{cursor:grabbing}
 #strategy-dialog .strategy-image-stage img{-webkit-user-drag:none;user-select:none}
+
+/* Home: roster coverage first, then measurement statistics. */
+#home-summary{grid-template-columns:repeat(3,minmax(0,1fr))}

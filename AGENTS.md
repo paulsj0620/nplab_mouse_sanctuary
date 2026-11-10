@@ -446,3 +446,8 @@ Removed the Data page's obsolete Original roster link to /api/source/seed, which
 - 운영 교체 전 롤백 검증 후 단일 트랜잭션 적용, foreign_key/integrity 검사 및 snapshot 183/9,374 확인. 전송 패키지에는 계정/세션 테이블 없음. 임시 원격 전송 파일 제거. 운영 DB 전체 덮어쓰기/자동 SMB 백업 없음.
 - 66dff2a Actions test 실패를 로컬 동일 명령으로 재현: test_i18n.cjs 가상 document에 addEventListener가 없었음. 이벤트 listener/dispatch 및 Event.type을 보완. Python 30개, JS 26개 통과; code-only deploy package preview 통과. Node20 메시지는 경고이며 재현된 실패 원인이 아님.
 - 수정된 테스트는 아직 커밋/푸시하지 않음. 자동 배포는 수정본 push 후 재시도 필요. 데이터 반영과 코드 배포는 별개.
+
+### 2026-11-10 — Home 명부 및 측정값 보유 수 구분
+- Home 첫 줄에 Total mice / Mice with measurements / Mice without measurements 3개 카드 표시. 고유 roster ID 기준, 유한 숫자 측정값이 하나 이상 있는 마우스를 집계하며 0 포함·NULL 제외·반복 측정 중복 집계 없음.
+- 기존 Experiments/Metrics/Recorded values는 둘째 줄에 유지. 한영 번역 제공. 데이터에서 동적으로 계산하며 183/134/49를 하드코딩하지 않음.
+- 183/134/49 fixture와 0·반복값·결측값 확인, JS 문법 검증 통과. 코드만 변경, 운영 DB 변경 없음. 커밋/푸시/배포는 수행하지 않음.

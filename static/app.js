@@ -604,7 +604,9 @@ function renderHomeSummary(dataset){
  const recorded=dataset.measurements.filter(hasRecordedValue);
  const mouseIds=new Set(recorded.map(row=>row.mouse_id));
  const experiments=new Set(dataset.mice.filter(mouse=>mouseIds.has(mouse.mouse_id)).map(mouse=>mouse.experiment).filter(Boolean));
- const cards=[['Mice',mouseIds.size],['Experiments',experiments.size],['Metrics',new Set(recorded.map(row=>row.metric_id)).size],['Recorded values',recorded.length]];
+ const totalMice=new Set(dataset.mice.map(mouse=>mouse.mouse_id));
+ const measuredMice=[...totalMice].filter(id=>mouseIds.has(id)).length;
+ const cards=[['Total mice',totalMice.size],['Mice with measurements',measuredMice],['Mice without measurements',totalMice.size-measuredMice],['Experiments',experiments.size],['Metrics',new Set(recorded.map(row=>row.metric_id)).size],['Recorded values',recorded.length]];
  $('#home-summary').innerHTML=cards.map(([label,n])=>`<section class="home-card"><span>${esc(label)}</span><strong class="home-number">${n.toLocaleString()}</strong></section>`).join('');
 }
 async function renderHome(){
