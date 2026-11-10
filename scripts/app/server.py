@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import subprocess
+import re
 import socket
 import argparse, ipaddress, json, os, mimetypes, secrets, sqlite3, time, threading, traceback
 from pathlib import Path
@@ -9,6 +11,21 @@ from urllib.parse import urlparse, unquote, parse_qs, quote
 from scripts.app.service import Store, Problem, dump
 
 ROOT=PROJECT_ROOT
+
+def build_version():
+    try:
+        if (ROOT/'build.json').is_file():
+            info=json.loads((ROOT/'build.json').read_text())
+            commit=info.get('commit','')
+            dirty=info.get('dirty',False)
+        else:
+            commit=subprocess.check_output(['git','-C',str(ROOT),'rev-parse','HEAD'],text=True,stderr=subprocess.DEVNULL,timeout=3).strip()
+            dirty=bool(subprocess.check_output(['git','-C',str(ROOT),'status','--porcelain','--untracked-files=no'],text=True,stderr=subprocess.DEVNULL,timeout=3).strip())
+        if re.fullmatch(r'[0-9a-f]{40,64}',commit):
+            return commit[:7]+(' (modified)' if dirty else '')
+    except (OSError,ValueError,TypeError,subprocess.SubprocessError):
+        pass
+    return 'unknown'
 
 def fcs_allowed(user):
     # Explicit stable IDs; renaming an account never grants preview access.
@@ -58,7 +75,7 @@ class Handler(BaseHTTPRequestHandler):
             with store.db() as c:setup=c.execute('SELECT count(*) FROM users').fetchone()[0]==0
             try:u=store.session(self.token())
             except Problem:u=None
-            return self.respond(200,{'user':public_user(u),'setup_required':setup,'local_setup_allowed':not self.server.hosted and self.client_address[0] in ('127.0.0.1','::1')})
+            return self.respond(200,{'build_version':self.server.build_version,'user':public_user(u),'setup_required':setup,'local_setup_allowed':not self.server.hosted and self.client_address[0] in ('127.0.0.1','::1')})
         if self.command=='POST' and path in ('/api/login','/api/setup'):
             d=self.body()
             with self.server.rate_lock:
@@ -104,7 +121,7 @@ class Handler(BaseHTTPRequestHandler):
                     import shutil
                     shutil.copyfileobj(f,self.wfile,1024*1024)
                 return
-            if path=='/api/state':return self.respond(200,store.snapshot())
+            if path=='/api/state':return self.respond(200,{**store.snapshot(),'build_version':self.server.build_version})
             if path=='/api/audit':return self.respond(200,visible_audit(store.audit(),user))
             if path=='/api/export':
                 bundle=store.snapshot(include_audit=True);bundle['schema_version']=3
@@ -200,6 +217,7 @@ def make_server(host,port,db,secure=False,allowed_networks=(),*,hosted=False):
     server_class = IPv6Server if ':' in host else ThreadingHTTPServer
     server=server_class((host,port),Handler);server.daemon_threads=True
     server.hosted = hosted
+    server.build_version = build_version()
     server.allowed_networks=tuple(ipaddress.ip_network(n,strict=True) for n in allowed_networks)
     server.secure=secure;server.attempts={};server.rate_lock=threading.Lock()
     if hosted:

@@ -252,7 +252,9 @@ function renderData(){const q=$('#search').value.toLowerCase(),kind=$('#table-ki
  $('#data-count').textContent=`${data.mice.length} mice · ${data.metrics.length} metrics · ${data.measurements.length} observations`;
  $('#uploads').innerHTML=data.uploads.map(u=>`<div class="source-row"><span>${esc(u.filename)} · ${esc(u.uploaded_by)} · ${esc(new Date(u.created_at).toLocaleString('en-GB'))}</span><a href="/api/source/${u.id}">Download original</a>${user.role==='admin'||(user.role==='editor'&&user.username===u.uploaded_by)?`<button type="button" data-remove-upload="${esc(u.id)}">${document.documentElement.lang==='ko'?'가져오기 삭제':'Remove import'}</button>`:''}</div>`).join('')||'<p>No measurement files imported yet.</p>';
 }
-async function sync(silent=false){if(guest)return;try{const next=await api('/state');if(!data||next.revision!==data.revision){data=next;renderHomeSummary(data);populate();if(!silent)notice('Loaded the latest server data.');}$('#sync-state').textContent='Saved on server · Last checked '+new Date().toLocaleTimeString('en-GB');}catch(e){$('#sync-state').textContent='Disconnected. Check your connection before saving.';if(!silent)notice(e.message)}}
+let runningBuild='unknown';
+function buildStatus(){return ' · Build '+runningBuild;}
+async function sync(silent=false){if(guest)return;try{const next=await api('/state');runningBuild=next.build_version||runningBuild;if(!data||next.revision!==data.revision){data=next;renderHomeSummary(data);populate();if(!silent)notice('Loaded the latest server data.');}$('#sync-state').textContent='Saved on server'+buildStatus()+' · Last checked '+new Date().toLocaleTimeString('en-GB');}catch(e){$('#sync-state').textContent='Disconnected. Check your connection before saving.';if(!silent)notice(e.message)}}
 let graphDraftReady=false;
 function graphDraftKey(){
  return 'mouse-sanctuary-graph-v1-'+(guest?'guest':String(user?.id||user?.username))+'-'+(example?'example':'study');
@@ -318,7 +320,7 @@ function allowedPage(page){
  return !!document.getElementById(page)?.classList.contains('page')&&
   (page!=='users'||user?.role==='admin')&&(page!=='fcs'||!!user?.fcs_access);
 }
-async function start(){const state=await api('/me');if(guest)return;setup=state.setup_required;user=state.user;if(!user){if(guestSession()){$('#guest-start').click();return;}$('#auth').hidden=false;$('#workspace').hidden=true;$('#auth-description').textContent=setup?'Create the first administrator account to manage lab users.':'Sign in with your lab account.';$('#login-button').textContent=setup?'Create administrator':'Sign in';if(setup&&!state.local_setup_allowed){$('#login-button').disabled=true;$('#auth-description').textContent='Set up the first administrator on the server computer using localhost.'}return;}$('#auth').hidden=true;$('#workspace').hidden=false;$('#account').textContent=user.username;$('#users-tab').hidden=user.role!=='admin';$('[data-page="fcs"]').hidden=!user.fcs_access;if(!user.fcs_access){$('#fcs').hidden=true;if($('[data-page="fcs"]').classList.contains('active'))$('[data-page="graphs"]')?.click();}data=await api('/state');restoreGraphDraft();populate();$('#sync-state').textContent='Connected to server';
+async function start(){const state=await api('/me');runningBuild=state.build_version||'unknown';if(guest)return;setup=state.setup_required;user=state.user;if(!user){if(guestSession()){$('#guest-start').click();return;}$('#auth').hidden=false;$('#workspace').hidden=true;$('#auth-description').textContent=setup?'Create the first administrator account to manage lab users.':'Sign in with your lab account.';$('#login-button').textContent=setup?'Create administrator':'Sign in';if(setup&&!state.local_setup_allowed){$('#login-button').disabled=true;$('#auth-description').textContent='Set up the first administrator on the server computer using localhost.'}return;}$('#auth').hidden=true;$('#workspace').hidden=false;$('#account').textContent=user.username;$('#users-tab').hidden=user.role!=='admin';$('[data-page="fcs"]').hidden=!user.fcs_access;if(!user.fcs_access){$('#fcs').hidden=true;if($('[data-page="fcs"]').classList.contains('active'))$('[data-page="graphs"]')?.click();}data=await api('/state');restoreGraphDraft();populate();$('#sync-state').textContent='Connected to server'+buildStatus();
  const saved=storedPage(),page=allowedPage(saved)?saved:'home';
  const button=[...document.querySelectorAll('[data-page]')].find(b=>b.dataset.page===page);
  button?.click();
@@ -334,7 +336,7 @@ $('#guest-start').onclick=()=>{
  document.querySelectorAll('.page').forEach(p=>p.hidden=p.id!=='graphs');
  document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page==='graphs'));
  restoreGraphDraft();populate();showGraphControl('graph-settings-body');
- $('#sync-state').textContent='Guest preview · Synthetic data';
+ $('#sync-state').textContent='Guest preview · Synthetic data'+buildStatus();
 };
 $('#guest-exit').onclick=()=>{guestSession(false);location.reload();};
 $('#login').onsubmit=async e=>{e.preventDefault();try{user=await api(setup?'/setup':'/login','POST',{username:$('#username').value,password:$('#password').value});$('#password').value='';await start()}catch(e){$('#auth-error').textContent=e.message}};

@@ -5,6 +5,7 @@ import argparse
 import fcntl
 import hashlib
 import io
+import json
 import os
 from pathlib import Path
 import re
@@ -16,6 +17,7 @@ import zipfile
 
 SSH = "nplab@ssh-nplab.alwaysdata.net"
 FILES = (
+    "build.json",
     "scripts/__init__.py", "scripts/paths.py", "scripts/app/__init__.py",
     "scripts/app/server.py", "scripts/app/service.py", "scripts/app/experiments.py",
     "scripts/imports/__init__.py", "scripts/imports/facs.py", "scripts/imports/histology.py",
@@ -41,6 +43,12 @@ def archive(root):
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as bundle:
         for name in FILES:
+            if name == "build.json":
+                commit = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip()
+                dirty = bool(subprocess.check_output(["git", "-C", str(root), "status", "--porcelain", "--untracked-files=no"], text=True).strip())
+                files[name] = json.dumps({"commit": commit, "dirty": dirty}).encode()
+                bundle.writestr(name, files[name])
+                continue
             path = root / name
             if path.resolve() != path or not path.is_file():
                 raise ValueError(f"Missing or linked source file: {name}")
