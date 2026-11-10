@@ -1,4 +1,5 @@
 """Persistent laboratory data service. All writes are transactional and audited."""
+import shutil
 import base64, csv, hashlib, io, json, math, os, re, secrets, sqlite3, time, zipfile
 from pathlib import Path
 from datetime import datetime, timezone
@@ -34,6 +35,11 @@ class ClosingConnection(sqlite3.Connection):
 
 class Store:
     def __init__(self, path, seed=None, *, existing_only=False):
+        self.storage_path=Path(path).resolve()
+        self.upload_total_limit=200*1024*1024
+        self.upload_user_limit=100*1024*1024
+        self.upload_pending_limit=20*1024*1024
+        self.upload_pending_count=20
         self.import_review_secret=secrets.token_bytes(32)
         self.existing_only = existing_only
         if existing_only:
@@ -104,6 +110,32 @@ CREATE TRIGGER IF NOT EXISTS uploads_no_delete BEFORE DELETE ON uploads BEGIN SE
                 self.event(c,actor,'rename','user',target_id,{'username':target['username']},{'username':username},'Username changed')
             return {**dict(target),'username':username}
 
+    def access_disabled(self,c,uid):
+        # Existing immutable audit events hold explicit access changes. No schema
+        # migration or rewrite of accounts/passwords/research data is necessary.
+        row=c.execute("SELECT after_json FROM events WHERE entity='user' AND entity_id=? AND action='access_change' ORDER BY id DESC LIMIT 1",(str(uid),)).fetchone()
+        return bool(json.loads(row[0]).get('disabled')) if row else False
+
+    def list_users(self):
+        with self.db() as c:
+            return [{**dict(r),'disabled':self.access_disabled(c,r['id'])} for r in c.execute('SELECT id,username,role,created_at FROM users')]
+
+    def set_user_access(self,target_id,disabled,expected_disabled,actor,reason):
+        if type(disabled) is not bool or type(expected_disabled) is not bool:raise Problem('Choose an account access status.')
+        reason=required(reason,'Reason',2000)
+        with self.db() as c:
+            c.execute('BEGIN IMMEDIATE')
+            author=c.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
+            if not author or author['role']!='admin' or self.access_disabled(c,actor):raise Problem('Only administrators can change account access.',403)
+            if not c.execute('SELECT 1 FROM users WHERE id=?',(target_id,)).fetchone():raise Problem('User not found.',404)
+            if target_id==actor:raise Problem('You cannot disable your own account.',409)
+            before=self.access_disabled(c,target_id)
+            if before!=expected_disabled:raise Problem('Account access has changed. Refresh and try again.',409)
+            if before!=disabled:
+                if disabled:c.execute('DELETE FROM sessions WHERE user_id=?',(target_id,))
+                self.event(c,actor,'access_change','user',target_id,{'disabled':before},{'disabled':disabled},reason)
+        return {'id':target_id,'disabled':disabled}
+
     def change_password(self, actor, current_password, new_password):
         if not isinstance(new_password,str) or not 12<=len(new_password)<=200:
             raise Problem('Passwords must contain 12–200 characters.')
@@ -141,11 +173,13 @@ CREATE TRIGGER IF NOT EXISTS uploads_no_delete BEFORE DELETE ON uploads BEGIN SE
     def login(self,username,password):
         name=username[:80] if isinstance(username,str) else '(invalid username)'
         with self.db() as c:
+            c.execute('BEGIN IMMEDIATE')
             u=c.execute('SELECT * FROM users WHERE username=?',(username if isinstance(username,str) else '',)).fetchone()
             valid=False
-            if u and isinstance(password,str):
-                candidate=hashlib.pbkdf2_hmac('sha256',password.encode(),bytes.fromhex(u['salt']),600000).hex()
-                valid=secrets.compare_digest(candidate,u['password'])
+            if isinstance(password,str) and 1<=len(password)<=200:
+                salt=bytes.fromhex(u['salt']) if u else bytes(16)
+                candidate=hashlib.pbkdf2_hmac('sha256',password.encode(),salt,600000).hex()
+                valid=bool(u) and secrets.compare_digest(candidate,u['password']) and not self.access_disabled(c,u['id'])
             c.execute('INSERT INTO login_history(user_id,username,outcome,created_at) VALUES(?,?,?,?)',(u['id'] if u else None,name,'success' if valid else 'failure',stamp()))
             if valid:
                 token=secrets.token_urlsafe(32);csrf=secrets.token_urlsafe(24)
@@ -156,6 +190,7 @@ CREATE TRIGGER IF NOT EXISTS uploads_no_delete BEFORE DELETE ON uploads BEGIN SE
     def session(self,token):
         with self.db() as c:
             r=c.execute('SELECT u.id,u.username,u.role,s.csrf FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.expires>?',(hashlib.sha256(token.encode()).hexdigest(),time.time())).fetchone()
+            if r and self.access_disabled(c,r['id']):r=None
         if not r: raise Problem('Please log in.',401)
         return dict(r)
     def snapshot(self,include_audit=False):
@@ -203,19 +238,41 @@ CREATE TRIGGER IF NOT EXISTS uploads_no_delete BEFORE DELETE ON uploads BEGIN SE
 
     def stage(self,filename,encoded,actor):
         filename=required(filename,'Filename',250)
+        if not isinstance(encoded,str) or len(encoded)>4*((10*1024*1024+2)//3):raise Problem('Files must not exceed 10 MB.',413)
         try:raw=base64.b64decode(encoded,validate=True)
         except Exception:raise Problem('Invalid file data')
-        if len(raw)>10*1024*1024:raise Problem('Files must not exceed 10 MB.')
-        table=self.read_table(filename,raw)
-        uid=secrets.token_hex(16)
-        with self.db() as c:c.execute('INSERT INTO uploads(id,filename,sha256,original,owner,created_at) VALUES(?,?,?,?,?,?)',(uid,filename,hashlib.sha256(raw).hexdigest(),raw,actor,stamp()))
+        if len(raw)>10*1024*1024:raise Problem('Files must not exceed 10 MB.',413)
+        digest=hashlib.sha256(raw).hexdigest()
+        # Serialize quota checks with insertion, including separate server workers.
+        # Never prune pending uploads: originals remain immutable and recoverable.
+        with self.db() as c:
+            c.execute('BEGIN IMMEDIATE')
+            u=c.execute('SELECT role FROM users WHERE id=?',(actor,)).fetchone()
+            if not u or u['role'] not in ('admin','editor') or self.access_disabled(c,actor):raise Problem('Upload access is not allowed.',403)
+            previous=c.execute("SELECT id FROM uploads WHERE owner=? AND sha256=? AND filename=? AND status='pending' ORDER BY created_at DESC LIMIT 1",(actor,digest,filename)).fetchone()
+            if not previous:
+                usage=c.execute("SELECT coalesce(sum(length(original)),0),coalesce(sum(CASE WHEN owner=? THEN length(original) ELSE 0 END),0),coalesce(sum(CASE WHEN owner=? AND status='pending' THEN length(original) ELSE 0 END),0),sum(CASE WHEN owner=? AND status='pending' THEN 1 ELSE 0 END) FROM uploads",(actor,actor,actor)).fetchone()
+                if usage[0]+len(raw)>self.upload_total_limit or usage[1]+len(raw)>self.upload_user_limit:
+                    raise Problem('Upload storage limit reached. Contact the administrator; existing files have been preserved.',413)
+                if usage[2]+len(raw)>self.upload_pending_limit or (usage[3] or 0)>=self.upload_pending_count:
+                    raise Problem('Too many pending uploads. Finish importing an existing file or contact the administrator.',413)
+                if shutil.disk_usage(self.storage_path.parent).free < 64*1024*1024+3*len(raw):
+                    raise Problem('Not enough server storage for a safe upload. Existing files have been preserved.',507)
+            table=self.read_table(filename,raw)
+            uid=previous['id'] if previous else secrets.token_hex(16)
+            if not previous:c.execute('INSERT INTO uploads(id,filename,sha256,original,owner,created_at) VALUES(?,?,?,?,?,?)',(uid,filename,digest,raw,actor,stamp()))
         return {'upload_id':uid,**table,'rows':table['rows'][:8],'row_count':len(table['rows'])}
     def read_table(self,filename,raw,sheet=None):
         if filename.lower().endswith('.xls'):
             from scripts.imports.facs import read_xls
             return read_xls(raw,sheet,Problem)
         if filename.lower().endswith('.csv'):
-            try:rows=list(csv.reader(io.StringIO(raw.decode('utf-8-sig'))))
+            try:
+                rows=[]
+                for row in csv.reader(io.StringIO(raw.decode('utf-8-sig'))):
+                    if len(rows)>=10001 or len(row)>200:raise Problem('The limit is 10,000 rows and 200 columns.')
+                    rows.append(row)
+            except Problem:raise
             except Exception:raise Problem('Save the file as UTF-8 CSV.')
             sheets=[];selected='CSV'
         elif filename.lower().endswith('.xlsx'):

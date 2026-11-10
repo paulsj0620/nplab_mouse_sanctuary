@@ -9,6 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from http.cookies import SimpleCookie
 from urllib.parse import urlparse, unquote, parse_qs, quote
 from scripts.app.service import Store, Problem, dump
+from scripts.app.security import LoginLimiter, client_ip
 
 ROOT=PROJECT_ROOT
 
@@ -46,6 +47,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(status);self.send_header('Content-Type',ctype);self.send_header('Content-Length',str(len(body)))
         self.send_header('Cache-Control','no-store');self.send_header('X-Content-Type-Options','nosniff');self.send_header('Referrer-Policy','same-origin')
         self.send_header('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'")
+        if self.server.hosted:self.send_header('Strict-Transport-Security','max-age=31536000')
+        if status==429:self.send_header('Retry-After','300')
         if cookie:self.send_header('Set-Cookie',cookie)
         if download:self.send_header('Content-Disposition',f'attachment; filename="{download}"')
         self.end_headers();self.wfile.write(body)
@@ -57,7 +60,9 @@ class Handler(BaseHTTPRequestHandler):
         if not self.headers.get('Content-Type','').startswith('application/json'):raise Problem('A JSON request is required.',415)
         try:n=int(self.headers.get('Content-Length','0'))
         except ValueError:raise Problem('Invalid request length')
-        if n<=0 or n>15*1024*1024:raise Problem('Check the request size.',413)
+        path=urlparse(self.path).path
+        limit=15*1024*1024 if path=='/api/upload' else (16384 if path in ('/api/login','/api/setup') else 2*1024*1024)
+        if n<=0 or n>limit:raise Problem('Check the request size.',413)
         try:d=json.loads(self.rfile.read(n))
         except Exception:raise Problem('Invalid JSON')
         if not isinstance(d,dict):raise Problem('A JSON object is required.')
@@ -78,16 +83,20 @@ class Handler(BaseHTTPRequestHandler):
             return self.respond(200,{'build_version':self.server.build_version,'user':public_user(u),'setup_required':setup,'local_setup_allowed':not self.server.hosted and self.client_address[0] in ('127.0.0.1','::1')})
         if self.command=='POST' and path in ('/api/login','/api/setup'):
             d=self.body()
-            with self.server.rate_lock:
-                now=time.time();attempts=[t for t in self.server.attempts.get(self.client_address[0],[]) if now-t<300]
-                if len(attempts)>=15:
-                    store.record_login(d.get('username'),'blocked')
-                    raise Problem('Please wait before trying to log in again.',429)
-                self.server.attempts[self.client_address[0]]=attempts+[now]
-            if path=='/api/setup':
-                if self.client_address[0] not in ('127.0.0.1','::1'):raise Problem('Set up the first administrator on the server computer.',403)
-                store.create_user(d.get('username'),d.get('password'),'admin',setup=True)
-            token,user=store.login(d.get('username'),d.get('password'))
+            ticket, log_block = self.server.login_limiter.begin(
+                client_ip(self.client_address[0], self.headers, self.server.hosted), d.get('username'))
+            if ticket is None:
+                if log_block: store.record_login(d.get('username'),'blocked')
+                raise Problem('Please wait five minutes before trying to log in again.',429)
+            success=False
+            try:
+                if path=='/api/setup':
+                    if self.client_address[0] not in ('127.0.0.1','::1'):raise Problem('Set up the first administrator on the server computer.',403)
+                    store.create_user(d.get('username'),d.get('password'),'admin',setup=True)
+                token,user=store.login(d.get('username'),d.get('password'))
+                success=True
+            finally:
+                self.server.login_limiter.finish(ticket,success)
             secure='; Secure' if self.server.secure else ''
             return self.respond(200,public_user(user),cookie=f'lab_session={token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=43200{secure}')
         user=store.session(self.token())
@@ -103,6 +112,16 @@ class Handler(BaseHTTPRequestHandler):
                 if len(body)!=length:raise Problem('Incomplete upload chunk.',400)
                 offset=int(parse_qs(urlparse(self.path).query).get('offset',['-1'])[0])
                 return self.respond(200,self.server.fcs.append(path.rsplit('/',1)[1],user['id'],offset,body))
+            if self.command=='POST' and path in ('/api/upload','/api/preview','/api/import/review','/api/import'):
+                if not self.server.import_slot.acquire(blocking=False):
+                    raise Problem('Another import is being processed. Please try again shortly.',503)
+                try:
+                    d=self.body()
+                    if path=='/api/upload':return self.respond(201,store.stage(d.get('filename'),d.get('content'),user['id']))
+                    if path=='/api/preview':return self.respond(200,store.preview(d.get('upload_id'),user['id'],d.get('sheet')))
+                    if path=='/api/import/review':return self.respond(200,store.review_import(d.get('upload_id'),d.get('mapping',{}),user['id']))
+                    return self.respond(201,store.commit_import(d.get('upload_id'),d.get('mapping',{}),user['id'],d.get('reason'),review_token=d.get('review_token'),require_review=True))
+                finally:self.server.import_slot.release()
             d=self.body()
         if self.command=='GET':
             if path=='/api/experiments':
@@ -142,7 +161,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(200,store.login_history(user['id'],before))
             if path=='/api/users':
                 if user['role']!='admin':raise Problem('Only administrators can view this.',403)
-                with store.db() as c:users=[dict(r) for r in c.execute('SELECT id,username,role,created_at FROM users')]
+                users=store.list_users()
                 return self.respond(200,users)
             if path=='/api/source/seed':return self.respond(200,(ROOT/'archives/seed/Mouse-info.xlsx').read_bytes(),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',download='Mouse-info.xlsx')
             if path.startswith('/api/source/'):
@@ -189,13 +208,11 @@ class Handler(BaseHTTPRequestHandler):
             if path=='/api/users':return self.respond(201,store.create_user(d.get('username'),d.get('password'),d.get('role','editor'),user['id']))
             if path=='/api/import/remove':
                 return self.respond(200,store.archive_upload(d.get('upload_id'),user['id'],d.get('reason')))
-            if path=='/api/upload':return self.respond(201,store.stage(d.get('filename'),d.get('content'),user['id']))
-            if path=='/api/preview':return self.respond(200,store.preview(d.get('upload_id'),user['id'],d.get('sheet')))
-            if path=='/api/import/review':return self.respond(200,store.review_import(d.get('upload_id'),d.get('mapping',{}),user['id']))
-            if path=='/api/import':return self.respond(201,store.commit_import(d.get('upload_id'),d.get('mapping',{}),user['id'],d.get('reason'),review_token=d.get('review_token'),require_review=True))
             if path=='/api/presets':return self.respond(200,store.preset(d,user['id']))
         if self.command=='PATCH':
             if path=='/api/account':return self.respond(200,store.rename_user(user['id'],d.get('username'),d.get('expected_username'),user['id']))
+            if path.startswith('/api/users/') and path.endswith('/access'):
+                return self.respond(200,store.set_user_access(int(path.split('/')[-2]),d.get('disabled'),d.get('expected_disabled'),user['id'],d.get('reason')))
             if path.startswith('/api/users/'):return self.respond(200,store.rename_user(int(path.rsplit('/',1)[1]),d.get('username'),d.get('expected_username'),user['id']))
             if path.startswith('/api/measurements/'):return self.respond(200,store.edit_measurement(int(path.rsplit('/',1)[1]),d,user['id']))
             if path.startswith('/api/mice/'):return self.respond(200,store.edit_mouse(path.rsplit('/',1)[1],d,user['id']))
@@ -210,16 +227,40 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:traceback.print_exc();self.respond(500,{'error':'An error occurred while processing the request.'})
     do_GET=handle_request;do_POST=handle_request;do_PATCH=handle_request
 
-class IPv6Server(ThreadingHTTPServer):
+class BoundedHTTPServer(ThreadingHTTPServer):
+    def __init__(self,*args,**kwargs):
+        self.request_slots=threading.BoundedSemaphore(8)
+        super().__init__(*args,**kwargs)
+
+    def process_request(self,request,address):
+        if not self.request_slots.acquire(blocking=False):
+            try:
+                request.settimeout(1)
+                body=b'{"error":"Server is busy. Please try again shortly."}'
+                request.sendall(b'HTTP/1.0 503 Service Unavailable\r\nContent-Type: application/json\r\nCache-Control: no-store\r\nConnection: close\r\nRetry-After: 5\r\nContent-Length: '+str(len(body)).encode()+b'\r\n\r\n'+body)
+            except OSError:pass
+            finally:self.shutdown_request(request)
+            return
+        try:super().process_request(request,address)
+        except Exception:
+            self.request_slots.release()
+            raise
+
+    def process_request_thread(self,request,address):
+        try:super().process_request_thread(request,address)
+        finally:self.request_slots.release()
+
+class IPv6Server(BoundedHTTPServer):
     address_family = socket.AF_INET6
 
 def make_server(host,port,db,secure=False,allowed_networks=(),*,hosted=False):
-    server_class = IPv6Server if ':' in host else ThreadingHTTPServer
+    server_class = IPv6Server if ':' in host else BoundedHTTPServer
     server=server_class((host,port),Handler);server.daemon_threads=True
     server.hosted = hosted
     server.build_version = build_version()
     server.allowed_networks=tuple(ipaddress.ip_network(n,strict=True) for n in allowed_networks)
     server.secure=secure;server.attempts={};server.rate_lock=threading.Lock()
+    server.login_limiter=LoginLimiter();server.import_slot=threading.BoundedSemaphore(1)
     if hosted:
         server.store = Store(db, existing_only=True)
         return server

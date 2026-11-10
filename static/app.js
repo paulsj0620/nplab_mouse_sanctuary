@@ -111,6 +111,35 @@ function ensurePanels(){const metrics=graphMetrics(current()),preferred=[metrics
 function rememberPanel(){if(panels[activePanel])panels[activePanel]=structuredClone(cfg());}
 function panelConfigs(){return panels.slice(0,graphCount);}
 function restorePanelControls(){const c=panels[activePanel];if(!c)return;styles=Object.assign(Object.create(null),structuredClone(c.styles||{}));$('#weight-trend').value=c.trend||'off';const fields={metric:'metric',experiment:'experiment',weeks:'weeks',grouping:'grouping',type:'chart-type',error:'error-type',title:'plot-title',ytitle:'y-title',xtitle:'x-title',ymin:'y-min',ymax:'y-max',font:'font-size',angle:'angle',comparisonMode:'comparison-mode'};for(const [key,id] of Object.entries(fields))if(c[key]!==undefined)$('#'+id).value=c[key];updateTime();if([...$('#timepoint').options].some(o=>o.value===c.timepoint))$('#timepoint').value=c.timepoint;if([...$('#replicate').options].some(o=>o.value===c.replicate))$('#replicate').value=c.replicate;$('#show-excluded').checked=!!c.showExcluded;$('#active-graph').value=String(activePanel);$('#graph-count').value=String(graphCount);$('#active-graph-label').textContent=`Graph ${activePanel+1}`;}
+let graphVisibleRow=null,graphViewportFrame=0,graphScrollTimer;
+function graphRowStep(){const board=$('#figure');return board.clientHeight+(parseFloat(getComputedStyle(board).rowGap)||0);}
+function updateGraphPairStatus(){
+ const row=Math.max(0,Math.min(Math.ceil(graphCount/2)-1,graphVisibleRow||0)),first=row*2+1,last=Math.min(graphCount,first+1);
+ $('#graph-pair-status').textContent=`Graph ${first}${last>first?'–'+last:''} / ${graphCount}`;
+ $('#graph-pair-prev').disabled=row===0;$('#graph-pair-next').disabled=last===graphCount;
+}
+function fitGraphViewport(){
+ graphViewportFrame=0;if($('#graphs').hidden||$('#workspace').hidden)return;
+ const board=$('#figure'),top=board.getBoundingClientRect().top+window.scrollY;
+ const height=Math.max(300,Math.floor(window.innerHeight-top-18));
+ $('#graphs').style.setProperty('--graph-view-height',height+'px');
+ graphVisibleRow=Math.max(0,Math.min(Math.ceil(graphCount/2)-1,graphVisibleRow??Math.floor(activePanel/2)));
+ board.scrollTo({top:graphVisibleRow*graphRowStep(),behavior:'instant'});updateGraphPairStatus();
+}
+function scheduleGraphViewport(){if(!graphViewportFrame)graphViewportFrame=requestAnimationFrame(fitGraphViewport);}
+function showGraphPair(row){
+ graphVisibleRow=Math.max(0,Math.min(Math.ceil(graphCount/2)-1,row));
+ $('#figure').scrollTo({top:graphVisibleRow*graphRowStep(),behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});updateGraphPairStatus();
+}
+$('#graph-pair-prev').onclick=()=>showGraphPair((graphVisibleRow||0)-1);
+$('#graph-pair-next').onclick=()=>showGraphPair((graphVisibleRow||0)+1);
+$('#figure').addEventListener('scroll',()=>{if(graphViewportFrame)return;const step=graphRowStep();if(step>0){graphVisibleRow=Math.round($('#figure').scrollTop/step);updateGraphPairStatus();clearTimeout(graphScrollTimer);graphScrollTimer=setTimeout(()=>{if(!$('#graphs').hidden&&Math.floor(activePanel/2)!==graphVisibleRow)focusPanel(Math.min(graphCount-1,graphVisibleRow*2));},160);}},{passive:true});
+$('#figure').addEventListener('keydown',event=>{if(event.target!==$('#figure'))return;const keys={PageDown:1,PageUp:-1,ArrowDown:1,ArrowUp:-1};if(event.key in keys){event.preventDefault();showGraphPair((graphVisibleRow||0)+keys[event.key]);}});
+window.addEventListener('resize',scheduleGraphViewport);
+const graphViewportObserver=new ResizeObserver(scheduleGraphViewport);
+for(const el of [$('#workspace>header'),$('.graph-heading'),$('.graph-toolbar'),$('#message'),$('#guest-banner')])if(el)graphViewportObserver.observe(el);
+new MutationObserver(scheduleGraphViewport).observe($('#graphs'),{attributes:true,attributeFilter:['hidden']});
+new MutationObserver(scheduleGraphViewport).observe($('#workspace'),{attributes:true,attributeFilter:['hidden']});
 function renderGraphTabs(){
  $('#graph-tabs').innerHTML=Array.from({length:graphCount},(_,index)=>
   `<button type="button" role="tab" data-graph-tab="${index}" aria-controls="graph-settings-body" aria-selected="${index===activePanel}" tabindex="${index===activePanel?0:-1}">Graph ${index+1}</button>`).join('');
@@ -127,7 +156,8 @@ $('#graph-tabs').onkeydown=event=>{
  focusPanel((activePanel+offsets[event.key]+graphCount)%graphCount);
  showGraphControl('graph-settings-body');$('#graph-tabs [aria-selected="true"]').focus();
 };
-function focusPanel(index){if(index===activePanel)return;rememberPanel();activePanel=index;restorePanelControls();renderGraph();}
+function focusPanel(index){graphVisibleRow=Math.floor(index/2);if(index===activePanel){scheduleGraphViewport();return;}rememberPanel();activePanel=index;restorePanelControls();renderGraph();}
+
 function changePanelMetric(index,metricId,view=''){if(index===activePanel)rememberPanel();const metric=current().metrics.find(m=>m.id===Number(metricId));panels[index]=newPanel(metric);
  if(view==='weekly'){panels[index].type='line';panels[index].xtitle='Week';}
  if(view==='endpoint'){panels[index].type='bar';panels[index].timepoint=current().measurements.find(r=>r.metric_id===metric.id&&Number.isFinite(r.value)&&Figure.weekNumber(r.timepoint)===null)?.timepoint||'endpoint';}
@@ -135,16 +165,16 @@ function changePanelMetric(index,metricId,view=''){if(index===activePanel)rememb
 function boardConfig(){rememberPanel();return {...cfg(),dashboard:{study:graphStudy,comparisonIds:comparisonIds===null?null:[...comparisonIds],panels:structuredClone(panels),count:graphCount,active:activePanel,palette:structuredClone(groupPalette),groupSettings:structuredClone(sharedGroups)}};}
 function switchExample(next){saveGraphDraft();rememberPanel();boardCache[example?'demo':'real']={panels,activePanel,graphCount,groupPalette,sharedGroups};example=next;const saved=boardCache[example?'demo':'real'];panels=saved?.panels||[];activePanel=saved?.activePanel||0;graphCount=saved?.graphCount||4;groupPalette=saved?.groupPalette||Object.create(null);sharedGroups=saved?.sharedGroups||defaultSharedGroups();$('#example').textContent=example?'Return to study data':'Preview with example data';restoreGraphDraft();populate();}
 function renderGraph(rebuild=true){if(!data)return;renderGraphTabs();rememberPanel();for(const panel of panels){panel.scope_experiments=studyExperiments();panel.scope_mouse_ids=studyMouseIds();}syncGroupStyles();const d=current();boardResults=[];const availableMetrics=graphMetrics(d);const choiceLabel=panel=>{const m=d.metrics.find(m=>String(m.id)===panel.metric);return m?metricLabel(m):(availableMetrics.length?'Select a metric':'No measurements');};
- $('#choose-metric').textContent=choiceLabel(panels[activePanel]);$('#choose-metric').disabled=!availableMetrics.length;
+ $('#choose-metric').textContent=choiceLabel(panels[activePanel]);$('#choose-metric').title=choiceLabel(panels[activePanel]);$('#choose-metric').disabled=!availableMetrics.length;
  $('#weekly-trend').hidden=!(Figure.isWeight(d.metrics.find(m=>String(m.id)===panels[activePanel].metric))&&panels[activePanel].type==='line');
- $('#figure').innerHTML=panelConfigs().map((panel,index)=>{let figure;try{figure=Figure.render(d,{...panel,analysis:panelAnalysis(panel)});}catch(error){figure={svg:'',error:true,summary:[],message:error.message};}boardResults.push(figure);const n=figure.set?new Set(figure.set.records.filter(r=>r.value!==null&&!figure.set.byId.get(r.mouse_id).excluded&&figure.set.groups.includes(figure.set.byId.get(r.mouse_id)[panel.grouping]||'Not specified')).map(r=>r.mouse_id)).size:0;return `<article class="chart-card ${index===activePanel?'is-active':''}" data-panel-index="${index}"><header class="chart-card-header"><button type="button" data-panel-focus="${index}" aria-label="Graph ${index+1} Settings" aria-pressed="${index===activePanel}"><b>${String.fromCharCode(65+index)} · Graph ${index+1}</b><span>${index===activePanel?'Active':'Settings'}</span></button><button type="button" data-panel-statistics="${index}">p-value</button><span class="chart-card-n">n=${n} · ${esc(panel.error==='none'?'Mean':panel.error)}</span></header><label class="chart-metric-label">Metric<button type="button" ${availableMetrics.length?'':'disabled'} aria-haspopup="dialog" data-choose-metric="${index}">${esc(choiceLabel(panel))}</button></label><div class="chart-coverage">${figure.coverage?`Missing ${figure.coverage.missing.length} · Unmeasured ${figure.coverage.unmeasured.length} · Excluded ${figure.coverage.excluded.length}`:''}<button type="button" data-panel-coverage="${index}">N details</button></div><div class="chart-range-note">${figure.axis?.clippedLowerErrorBars?`Y-axis starts at ${esc(figure.axis.min)} · Lower ${esc(panel.error)} error bars partly clipped`:""}</div><div class="chart-statistics" ${panel.comparisonMode==='none'?'hidden':''}>${panel.statMode==='anova-tukey'?(figure.analysis?.status==='ok'?esc(Figure.formatP(figure.analysis.anova.p,'ANOVA p'))+' · Tukey-adjusted p':esc(panelAnalysis(panel)?.message||'Calculating…')):'Calculating p-values…'}</div><div class="chart-plot">${figure.svg||`<p class="chart-error">${esc(figure.message)}</p>`}</div></article>`}).join('');
+ $('#figure').innerHTML=panelConfigs().map((panel,index)=>{let figure;try{figure=Figure.render(d,{...panel,analysis:panelAnalysis(panel)});}catch(error){figure={svg:'',error:true,summary:[],message:error.message};}boardResults.push(figure);const n=figure.set?new Set(figure.set.records.filter(r=>r.value!==null&&!figure.set.byId.get(r.mouse_id).excluded&&figure.set.groups.includes(figure.set.byId.get(r.mouse_id)[panel.grouping]||'Not specified')).map(r=>r.mouse_id)).size:0;return `<article class="chart-card ${index===activePanel?'is-active':''}" data-panel-index="${index}"><header class="chart-card-header"><button type="button" data-panel-focus="${index}" aria-label="Graph ${index+1} Settings" aria-pressed="${index===activePanel}"><b>${String.fromCharCode(65+index)} · Graph ${index+1}</b><span>${index===activePanel?'Active':'Settings'}</span></button><button type="button" data-panel-statistics="${index}">p-value</button><span class="chart-card-n">n=${n} · ${esc(panel.error==='none'?'Mean':panel.error)}</span></header><label class="chart-metric-label">Metric<button type="button" ${availableMetrics.length?'':'disabled'} aria-haspopup="dialog" title="${esc(choiceLabel(panel))}" data-choose-metric="${index}">${esc(choiceLabel(panel))}</button></label><div class="chart-coverage">${figure.coverage?`Missing ${figure.coverage.missing.length} · Unmeasured ${figure.coverage.unmeasured.length} · Excluded ${figure.coverage.excluded.length}`:''}<button type="button" data-panel-coverage="${index}">N details</button></div><div class="chart-range-note">${figure.axis?.clippedLowerErrorBars?`Y-axis starts at ${esc(figure.axis.min)} · Lower ${esc(panel.error)} error bars partly clipped`:""}</div><div class="chart-statistics" ${panel.comparisonMode==='none'?'hidden':''}>${panel.statMode==='anova-tukey'?(figure.analysis?.status==='ok'?esc(Figure.formatP(figure.analysis.anova.p,'ANOVA p'))+' · Tukey-adjusted p':esc(panelAnalysis(panel)?.message||'Calculating…')):'Calculating p-values…'}</div><div class="chart-plot">${figure.svg||`<p class="chart-error">${esc(figure.message)}</p>`}</div></article>`}).join('');
  if(metricPicker)drawMetricStep();
- lastFigure=boardResults[activePanel];$('#figure-status').textContent=example?`${graphCount} graphs · Synthetic example (not research results)`:`${graphCount} graphs · ${studyMouseIds().length} mice selected · Globally excluded ${d.mice.filter(m=>m.excluded).length} mice${sampleChanges.size?' · Previewing unsaved sample selection':''}`;
+ scheduleGraphViewport();lastFigure=boardResults[activePanel];$('#figure-status').textContent=example?`${graphCount} graphs · Synthetic example (not research results)`:`${graphCount} graphs · ${studyMouseIds().length} mice selected · Globally excluded ${d.mice.filter(m=>m.excluded).length} mice${sampleChanges.size?' · Previewing unsaved sample selection':''}`;
  $('#summary').innerHTML=boardResults.map((figure,index)=>{
   const panel=panels[index],metric=d.metrics.find(m=>String(m.id)===String(panel.metric));
   const heading='<h3>Graph '+(index+1)+(metric?' · '+esc(metricLabel(metric)):'')+'</h3>';
   const rows=(figure.summary||[]).map(row=>[
-   esc(row.group)+(panel.type==='line'?' / '+esc(row.timepoint):''),row.n,fmt(row.mean),fmt(row.median),fmt(row.sd),fmt(row.sem),row.missing_values,row.unmeasured,row.excluded
+   esc(row.group)+(panel.type==='line'?' / '+esc(row.timepoint):''),row.n,fmt(row.mean),fmt(row.median)+(row.median_mouse_ids?.length?' <span class="median-source">(Mouse '+row.median_mouse_ids.map(esc).join(', ')+(row.median_is_midpoint?' · midpoint':'')+(row.median_tied?' · tied':'')+')</span>':''),fmt(row.sd),fmt(row.sem),row.missing_values,row.unmeasured,row.excluded
   ]);
   return '<section class="graph-summary-item">'+heading+(rows.length?table(['Group / Timepoint','n','Mean','Median','SD','SEM','Missing','Unmeasured','Excluded'],rows):'<p>'+esc(figure.message||'No measurements')+'</p>')+'</section>';
  }).join('');
@@ -320,10 +350,26 @@ function allowedPage(page){
  return !!document.getElementById(page)?.classList.contains('page')&&
   (page!=='users'||user?.role==='admin')&&(page!=='fcs'||!!user?.fcs_access);
 }
-async function start(){const state=await api('/me');runningBuild=state.build_version||'unknown';if(guest)return;setup=state.setup_required;user=state.user;if(!user){if(guestSession()){$('#guest-start').click();return;}$('#auth').hidden=false;$('#workspace').hidden=true;$('#auth-description').textContent=setup?'Create the first administrator account to manage lab users.':'Sign in with your lab account.';$('#login-button').textContent=setup?'Create administrator':'Sign in';if(setup&&!state.local_setup_allowed){$('#login-button').disabled=true;$('#auth-description').textContent='Set up the first administrator on the server computer using localhost.'}return;}$('#auth').hidden=true;$('#workspace').hidden=false;$('#account').textContent=user.username;$('#users-tab').hidden=user.role!=='admin';$('[data-page="fcs"]').hidden=!user.fcs_access;if(!user.fcs_access){$('#fcs').hidden=true;if($('[data-page="fcs"]').classList.contains('active'))$('[data-page="graphs"]')?.click();}data=await api('/state');restoreGraphDraft();populate();$('#sync-state').textContent='Connected to server'+buildStatus();
+async function start(){
+ const loading=$('#session-loading');
+ loading.hidden=false;$('#auth').hidden=true;$('#workspace').hidden=true;
+ $('#session-loading-text').textContent=document.documentElement.lang==='ko'?'화면을 불러오는 중…':'Loading workspace…';
+ $('#session-retry').hidden=true;
+ try{
+  await loadSession();
+  loading.hidden=true;
+ }catch(error){
+  $('#auth').hidden=true;$('#workspace').hidden=true;
+  $('#session-loading-text').textContent=document.documentElement.lang==='ko'?'화면을 불러오지 못했습니다. 연결을 확인하고 다시 시도하세요.':'Could not load the workspace. Check your connection and try again.';
+  $('#session-retry').hidden=false;
+ }
+}
+$('#session-retry').onclick=()=>start();
+async function loadSession(){const state=await api('/me');runningBuild=state.build_version||'unknown';if(guest)return;setup=state.setup_required;user=state.user;if(!user){if(guestSession()){$('#guest-start').click();return;}$('#auth').hidden=false;$('#workspace').hidden=true;$('#auth-description').textContent=setup?'Create the first administrator account to manage lab users.':'Sign in with your lab account.';$('#login-button').textContent=setup?'Create administrator':'Sign in';if(setup&&!state.local_setup_allowed){$('#login-button').disabled=true;$('#auth-description').textContent='Set up the first administrator on the server computer using localhost.'}return;}$('#auth').hidden=true;$('#account').textContent=user.username;$('#users-tab').hidden=user.role!=='admin';$('[data-page="fcs"]').hidden=!user.fcs_access;if(!user.fcs_access){$('#fcs').hidden=true;if($('[data-page="fcs"]').classList.contains('active'))$('[data-page="graphs"]')?.click();}data=await api('/state');restoreGraphDraft();populate();$('#sync-state').textContent='Connected to server'+buildStatus();
  const saved=storedPage(),page=allowedPage(saved)?saved:'home';
  const button=[...document.querySelectorAll('[data-page]')].find(b=>b.dataset.page===page);
  button?.click();
+ $('#workspace').hidden=false;
 }
 $('#guest-start').onclick=()=>{
  guestSession(true);guest=true;example=true;user=null;data=demo;sampleChanges.clear();
@@ -394,11 +440,26 @@ function paintLoginHistory(){const t=I18n.t;$('#login-history-results').innerHTM
 async function loadLoginHistory(more=false){if(user?.role!=='admin')return;try{const result=await api('/login-history'+(more&&loginHistoryCursor?'?before='+loginHistoryCursor:''));loginHistoryRows=more?[...loginHistoryRows,...result.rows]:result.rows;loginHistoryCursor=result.next_before;paintLoginHistory();}catch(e){notice(e.message);}}
 $('#login-history-refresh').onclick=()=>loadLoginHistory();$('#login-history-more').onclick=()=>loadLoginHistory(true);
 document.addEventListener('languagechange',()=>{if(user?.role==='admin')paintLoginHistory();});
-async function renderUsers(){await loadLoginHistory();accountRows=await api('/users');$('#user-list').innerHTML=table(['User','Role','Created',''],accountRows.map(u=>[esc(u.username),esc(u.role),esc(new Date(u.created_at).toLocaleString('en-GB')),`<button type="button" data-rename-user="${u.id}">Rename</button>`]))}
-$('#user-list').onclick=e=>{const button=e.target.closest('[data-rename-user]');if(!button)return;renamingUser=accountRows.find(u=>u.id===Number(button.dataset.renameUser));if(!renamingUser)return;$('#rename-username').value=renamingUser.username;$('#rename-error').textContent='';$('#rename-dialog').showModal()};
+let accessTarget=null;
+function paintUsers(){const t=window.I18n?.t||((s)=>s);$('#user-list').innerHTML=table(['User','Role','Created','Status',''],accountRows.map(u=>[esc(u.username),esc(u.role),esc(new Date(u.created_at).toLocaleString('en-GB')),esc(t(u.disabled?'Disabled':'Active')),`<button type="button" data-rename-user="${u.id}">Rename</button> ${u.id!==user.id?`<button type="button" data-access-user="${u.id}">${u.disabled?'Enable access':'Disable access'}</button>`:''}`]))}
+async function renderUsers(){await loadLoginHistory();accountRows=await api('/users');paintUsers()}
+document.addEventListener('languagechange',()=>{if(user?.role==='admin'&&accountRows)paintUsers()});
+$('#user-list').onclick=e=>{const access=e.target.closest('[data-access-user]');if(access){accessTarget=accountRows.find(u=>u.id===Number(access.dataset.accessUser));if(!accessTarget)return;$('#access-target').textContent=accessTarget.username+' — '+window.I18n.t(accessTarget.disabled?'Enable access':'Disable access');$('#access-reason').value='';$('#access-error').textContent='';$('#access-dialog').showModal();return;}const button=e.target.closest('[data-rename-user]');if(!button)return;renamingUser=accountRows.find(u=>u.id===Number(button.dataset.renameUser));if(!renamingUser)return;$('#rename-username').value=renamingUser.username;$('#rename-error').textContent='';$('#rename-dialog').showModal()};
+$('#access-close').onclick=()=>$('#access-dialog').close();
+$('#access-form').onsubmit=async e=>{e.preventDefault();const target=accessTarget,button=e.submitter;button.disabled=true;try{await api('/users/'+target.id+'/access','PATCH',{disabled:!target.disabled,expected_disabled:!!target.disabled,reason:$('#access-reason').value});$('#access-dialog').close();await renderUsers();notice(window.I18n.t('Account access updated.'))}catch(error){$('#access-error').textContent=error.message}finally{button.disabled=false}};
 $('#rename-close').onclick=()=>$('#rename-dialog').close();
 $('#rename-form').onsubmit=async e=>{e.preventDefault();const button=e.submitter;button.disabled=true;try{const result=await api('/users/'+renamingUser.id,'PATCH',{username:$('#rename-username').value,expected_username:renamingUser.username});if(result.id===user.id){user.username=result.username;$('#account').textContent=result.username}$('#rename-dialog').close();await renderUsers();notice('Username updated. Use the new username to sign in.')}catch(error){$('#rename-error').textContent=error.message}finally{button.disabled=false}};
 $('#my-account').onclick=async()=>{try{const state=await api('/me');if(!state.user){location.reload();return}user=state.user;accountExpectedName=user.username;$('#account').textContent=user.username;$('#account-username').value=user.username;$('#account-password-form').reset();$('#account-message').textContent='';$('#account-dialog').showModal()}catch(error){notice(error.message)}};
+$('#clear-drafts-logout').onclick=async()=>{
+ if(!confirm(window.I18n.t('Clear this account’s saved graph drafts on this browser and sign out?')))return;
+ try{
+  const keys=[...new Set([user.id,user.username].filter(v=>v!==undefined).map(v=>'mouse-sanctuary-graph-v1-'+v+'-'))];
+  // Clear only this account's drafts; pause autosave through the page reload.
+  for(const key of Object.keys(localStorage))if(keys.some(prefix=>key.startsWith(prefix)))localStorage.removeItem(key);
+  graphDraftReady=false;
+  await api('/logout','POST',{});guestSession(false);location.reload();
+ }catch(error){$('#account-message').textContent=error.message}
+};
 $('#account-close').onclick=()=>$('#account-dialog').close();
 $('#account-dialog').addEventListener('close',()=>$('#account-password-form').reset());
 $('#account-name-form').onsubmit=async e=>{e.preventDefault();const button=e.submitter;button.disabled=true;try{const result=await api('/account','PATCH',{username:$('#account-username').value,expected_username:accountExpectedName});user.username=result.username;accountExpectedName=result.username;$('#account').textContent=result.username;$('#account-message').textContent='Username saved. Use it the next time you sign in.';if(user.role==='admin')await renderUsers()}catch(error){$('#account-message').textContent=error.message}finally{button.disabled=false}};

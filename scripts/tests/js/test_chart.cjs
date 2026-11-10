@@ -89,3 +89,18 @@ test('Histology offers measured stains directly under each organ',()=>{
   ['Histology','Liver','HE','%',1],['Histology','Liver','PSR','%',2],['Histology','Gut','HE','%',3]
  ]);
 });
+
+
+test('median identifies central mice, midpoint, ties, missing and exclusions',()=>{
+ const sample=values=>({mice:values.map((v,i)=>({mouse_id:String(i+1),group_name:'A',excluded:0})),metrics:d.metrics,measurements:values.map((v,i)=>({mouse_id:String(i+1),metric_id:1,timepoint:'0',replicate:'1',value:v}))});
+ let x=sample([10,30,20]);let summary=F.dataset(x,c).summaries[0];
+ assert.equal(summary.median,20);assert.deepEqual(summary.median_mouse_ids,['3']);assert.equal(summary.median_is_midpoint,false);
+ x=sample([10,40,20,30]);summary=F.dataset(x,c).summaries[0];
+ assert.equal(summary.median,25);assert.deepEqual(summary.median_mouse_ids,['3','4']);assert.equal(summary.median_is_midpoint,true);
+ x=sample([10,20,20,20,30]);summary=F.dataset(x,c).summaries[0];
+ assert.deepEqual(summary.median_mouse_ids,['2','3','4']);assert.equal(summary.median_tied,true);
+ x=sample([0,null,20,10]);x.mice[2].excluded=1;summary=F.dataset(x,c).summaries[0];
+ assert.equal(summary.median,5);assert.deepEqual(summary.median_mouse_ids,['1','4']);
+ x.mice[0].excluded=1;x.mice[3].excluded=1;summary=F.dataset(x,c).summaries[0];
+ assert.equal(summary.median,null);assert.deepEqual(summary.median_mouse_ids,[]);
+});

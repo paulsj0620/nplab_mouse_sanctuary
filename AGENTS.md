@@ -327,3 +327,55 @@ Added append-only login_history table (id, stable user_id if known, attempted us
 ## Graph browser drafts
 
 Graph 설정은 localStorage의 버전 있는 키에 사용자 ID(없으면 username), 게스트, 실제/예시 모드를 구분해 자동 저장한다. 그래프 개수, 활성 탭, 패널 설정, 그룹 서식, 비교 대상, 저장 전 제외 변경과 사유를 복원한다. 서버 측 샘플 버전이 바뀌었거나 삭제된 대상의 제외 초안은 복원에서 제외하고 안내한다. 저장은 브라우저에 한정하며 Shared presets는 연구실 공유 용도로 유지한다. 저장소 사용이 차단되면 안내한다. 페이지 위치는 기존 sessionStorage로 복원한다. 브라우저에서 새로고침 후 개수·활성 탭·제목·오차 막대·추세선 복원을 검증했다. 이번 변경은 개발본이며 아직 배포하지 않았다.
+
+
+## 2026-11-10 Security hardening and Graph follow-ups
+
+- Existing accounts, password hashes, research data and immutable source files must remain intact. This change does not reset credentials, disable any real account, migrate the production schema, start backups, commit/push or deploy.
+- Login throttling now reserves in-flight attempts and retains failed attempts only: per account 15 and per IP 30 within 5 minutes, bounded to 4096 keys. Successful attempts release their reservation. Blocked events are recorded once per account/window, not on every retry. Counters are process-local and reset on restart. Only `--alwaysdata` trusts the provider-replaced `X-Real-IP`; LAN deployments ignore forwarded headers. Do not expose that hosted backend directly to untrusted clients.
+- Hosted responses include HSTS for one year (no includeSubDomains/preload). The user separately enabled Force HTTPS in alwaysdata. Server handles at most 8 concurrent requests; excess gets a retryable 503. Login/setup JSON limit 16 KiB, normal JSON 2 MiB, summary-upload JSON 15 MiB. One authenticated import operation at a time, including body decoding and workbook parsing; another request gets a retryable 503.
+- Summary upload defaults: 10 MiB/file, 200 MiB total stored original blobs, 100 MiB/user, 20 MiB and 20 files pending/user, minimum 64 MiB free disk plus upload transaction headroom. These caps cover summary-upload blobs, not FCS assets or the full hosting account quota. Checks and insertion run in one transaction. Exact same-owner, same-name, same-hash pending reuploads reuse the original. No cleanup/deletion of existing originals, including pending or archived files. Over-limit existing installations retain access to data but cannot add files beyond quota. CSV row/column limits checked while parsing.
+- User management has Disable/Enable access with mandatory reason, admin authorization, CSRF, stale-status protection and a self-disable guard. Disabled users cannot log in; sessions are revoked on disable. Status is derived from immutable `access_change` user events, so no schema migration is required. No existing user/event is changed on startup. Previously queued/in-flight work may finish; this is not cancellation of FCS jobs. Re-enable keeps the same password and requires a fresh login.
+- My account offers explicit clearing of this account's browser graph drafts and signing out; other accounts' drafts, server data and Shared presets are retained. Ordinary sign-out retains drafts as previously requested.
+- Summary Median now includes Mouse IDs. Odd N shows median-value mice; even N with distinct central values shows both central value populations marked midpoint. Equal central values show all tied mice rather than arbitrarily selecting one; missing/excluded mice follow existing filters.
+- Graph header has one row of 3 selection + 5 export/example buttons, all 40px high. The redundant Graph heading is removed; current selection and counts form a compact status row. Number of graphs sits immediately after the three selection buttons. The first graph card and sidebar now start at the same height; long guidance lives in a collapsed Help panel. Confirmed alignment at desktop widths 1280 and 1778.
+- Validation uses disposable DBs and synthetic browser data only. Full final Python suite: 73 main + 9 FCS tests passed, including request bounds, overload responses and account authorization. JS: 33 tests including median source edge cases. Browser checked account disable/restore, required reason, Korean labels, draft clearing, Median IDs and header layout. Follow-up production deployment still needs the existing code-only release workflow; include new scripts/app/security.py (already in allowlist). No production credentials/data were changed. The Mac development service was restarted and /api/me confirmed normal startup with existing accounts.
+
+
+### White Liquid Glass UI follow-up
+
+- User requested a subtle Liquid Glass treatment and compact layouts on other tabs. White/neutral translucent surfaces, restrained blur, rounded borders and shadows now apply to navigation, control panels, Home cards, upload/account forms and dialogs. Scientific graphs and data tables keep opaque white backgrounds; SVG/PNG rendering is unchanged. Solid fallback and reduced-transparency media rules are included.
+- Graph toolbar padding now contains the full keyboard focus ring. Number of graphs remains next to the selection buttons, and chart/sidebar tops remain aligned. Desktop overflow is horizontal rather than wrapping individual toolbar actions.
+- Import puts META/FACS tabs and template download on one row; detailed instructions are in Help. Data groups filters/search with export buttons; Edit History groups search/export with Help. Redundant Home/Import/Data/Edit History/User management titles are visually hidden but retained for assistive technology. Account creation controls align at 40px. FACS access rules and scientific tool layout remain unchanged.
+- Browser checks with synthetic data verified main tab navigation, META/FACS tab switching, CSV preview, Median source labels, focus ring clearance and chart/sidebar alignment at 1440/1778 widths. No real imports or account changes were made. Changes are development-only until the normal code-only production deployment.
+
+### 2026-11-10 Graph row alignment and glass refinement
+
+- Latest placement supersedes the earlier left-side count selector: Number of graphs is now inside the right-hand preview/export group, immediately before the five action buttons. Its label/value and all five buttons use weight 700.
+- Graph grid stretches each pair of cards to its row's tallest content; plot content sits at the card bottom. No fixed board-wide height. Browser verified eight plots at 1280/1440/1778 widths, including deliberately longer content in only one card: both cards in that row grow together, subsequent rows stay paired, and unrelated row heights remain unchanged.
+- Shared shape tokens use capsule menu/action buttons, 24px outer panels, 16px inset controls and 14px form fields. Explicit study-button specificity keeps left/right shapes consistent. Apple design-system concepts are a reference, not a claim of native Liquid Glass rendering or an exact universal Apple corner-radius value (https://developer.apple.com/videos/play/wwdc2025/356/).
+- More visible neutral glass surfaces now surround both Graph toolbar groups and the sidebar, with brighter edge highlights, gradients, blur and stronger soft shadows. Main navigation and dialogs retain glass treatment; scientific SVGs and tables stay opaque white. Reduced-transparency and no-backdrop-filter fallbacks remain. Focus rings retain full padding.
+- Browser screenshot review confirmed the menu/sidebar appearance after compositor settling. No account, password, database, original file, scientific calculation, export format, commit or production deployment changes in this UI refinement.
+
+
+### 2026-11-10 Viewport-fit Graph pairs and scroll snapping
+
+- The Graph board now displays two cards per viewport-height row with native vertical scroll snapping and overscroll containment. Height derives from actual browser innerHeight and the board's document position, leaving an 18px bottom margin; no 1080px screen-size assumption. A 300px minimum protects very small windows. Scientific SVG viewBoxes scale proportionally to fit the remaining card area, including titles, p-value brackets, axes, labels and footers. Figure generation/export dimensions are unchanged.
+- Sidebar maximum height uses the same available height. Fixed menu remains visible; long setting content scrolls internally. Summary and group formatting disclosures remain below the board in the outer page.
+- Previous/next pair buttons and a visible Graph range indicator added beside Help. Wheel/trackpad snaps rows; focused board supports PageUp/PageDown and arrow keys. Selecting a sidebar Graph tab brings that pair into view. Once scrolling settles, settings follow the first graph in the visible pair if the previously active graph is outside it. Resize, view switching and rendering updates preserve/clamp the visible row. Reduced-motion preference skips smooth programmatic movement.
+- Browser validated 1920x1080, 1920x927 (browser chrome allowance), and 1920x800; full chart/card/sidebar bounds fit. Tested 8 plots, odd count, count reduction, pair buttons, sidebar tabs, native wheel snap, long sidebar settings and leaving/returning to Graph. Synthetic fixtures only; no account/data changes or production deployment.
+
+### Group formatting shape follow-up
+The expanded Group colors/order/symbols section now retains the outer panel's rounded bottom corners and transparent glass background. Its six group cards use the shared 16px inset radius, matching borders and highlights, with sufficient inset padding for input focus rings. Form controls, reordering, stored graph settings and data are unchanged. Development CSS only; no deployment.
+
+### Lower disclosure contrast
+Group formatting and Summary now have a clearer 1px neutral border and short, restrained shadow. Their backgrounds are clipped to the rounded outer edge; expanded headers have a separator. Removed backdrop blur from these two containers to avoid a diffuse halo while keeping the rest of the glass theme. CSS only; data and deployment unchanged.
+
+### Shared cross-tab controls
+Applied the common capsule/rounded-control styling to native file-selector buttons (Import and QA FCS/WSP chooser), with a clear border, bold label, hover/focus/disabled states. File input IDs, accept/multiple attributes and upload behavior remain native and unchanged. Standardized action-button weights, input/table/dialog borders, status pills and uploaded-file rows across tabs. Native checkbox semantics and red import-validation outlines are retained. Development styling only.
+
+### Stable navigation labels
+Top navigation uses the same bold font weight in active and inactive states, with nonshrinking buttons. Selection is indicated through background/text color rather than width-changing typography. The document reserves a stable scrollbar gutter so moving between short and long pages does not shift the header horizontally. CSS-only change; navigation behavior and permissions unchanged.
+
+### Metric label overflow
+Graph-card and sidebar metric buttons now constrain long labels to their available width with ellipsis. Full label text remains in the DOM for accessibility and is also exposed through a title tooltip; the selection popup remains unchanged. Graph data and rendered/exported scientific titles are not abbreviated by this CSS.

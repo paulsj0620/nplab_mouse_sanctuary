@@ -93,7 +93,11 @@ function dataset(data,cfg){
  const present=new Set(rows.map(r=>r.mouse_id));const missing_values=roster.filter(m=>!m.excluded&&present.has(m.mouse_id)&&!active.some(r=>r.mouse_id===m.mouse_id)).length;
  const ordered=active.map(r=>r.value).sort((a,b)=>a-b),mid=Math.floor(ordered.length/2);
  const median=ordered.length?(ordered[mid]+ordered[Math.floor((ordered.length-1)/2)])/2:null;
- summaries.push({median,group:g,timepoint:tp,...stats(active.map(r=>r.value)),missing,missing_values,unmeasured:missing-missing_values,excluded:roster.filter(m=>m.excluded).length,rows});}
+ const lower=ordered[Math.floor((ordered.length-1)/2)],upper=ordered[mid];
+ const median_mouse_ids=active.filter(r=>r.value===lower||r.value===upper).map(r=>r.mouse_id).sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true}));
+ const median_is_midpoint=ordered.length>0&&lower!==upper;
+ const median_tied=median_mouse_ids.length>(median_is_midpoint?2:1);
+ summaries.push({median,median_mouse_ids,median_is_midpoint,median_tied,group:g,timepoint:tp,...stats(active.map(r=>r.value)),missing,missing_values,unmeasured:missing-missing_values,excluded:roster.filter(m=>m.excluded).length,rows});}
  const coverage={measured:[],missing:[],unmeasured:[],excluded:[]};
  for(const mouse of mice.filter(m=>groups.includes(m[cfg.grouping]||'Not specified'))){const rows=records.filter(r=>r.mouse_id===mouse.mouse_id);coverage[mouse.excluded?'excluded':rows.some(r=>r.value!==null)?'measured':rows.length?'missing':'unmeasured'].push(mouse.mouse_id);}
  return {groups,times,summaries,byId,records,coverage};

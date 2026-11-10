@@ -121,3 +121,166 @@
 #summary {padding:0 12px}
 .graph-summary-item {overflow-x:auto;padding:8px 0;border-bottom:1px solid #eee}
 .graph-summary-item:last-child {border-bottom:0}
+
+#session-loading {max-width:420px;margin:100px auto;padding:24px;text-align:center}
+
+/* Compact desktop Graph toolbar: selection and export share one baseline. */
+.graph-heading{display:flex;align-items:center;gap:18px;margin-bottom:10px;min-height:28px}
+.graph-heading #graph-selection-status{margin:0;font-size:12px}
+.graph-help{margin-left:auto;position:relative;font-size:12px;padding:0;border:0}
+.graph-help summary{cursor:pointer;color:#555}
+.graph-help>div{position:absolute;z-index:20;right:0;top:26px;width:480px;max-width:75vw;background:white;border:1px solid #ccc;border-radius:4px;padding:12px 16px;box-shadow:0 4px 16px #0001}
+.graph-help p{margin:0 0 8px;line-height:1.5}
+.graph-help p:last-child{margin-bottom:0}
+.graph-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;overflow-x:auto;padding:2px 1px 6px;margin-bottom:10px}
+#graphs .graph-toolbar .import-tabs{margin:0;flex-shrink:0}
+.graph-export-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto}
+#graphs .graph-toolbar button{height:40px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;padding:0 13px;border-radius:4px;font-size:12px;line-height:1.2}
+.median-source{font-size:11px;color:#555;white-space:normal}
+
+.graph-selection-actions{display:flex;align-items:center;gap:18px;flex-shrink:0}
+.graph-count-control{display:flex;flex-direction:row;align-items:center;gap:8px;margin:0;white-space:nowrap;font-size:12px}
+.graph-count-control select{height:40px;box-sizing:border-box;width:52px;padding:6px 8px}
+.graph-heading .figure-status{border:0;padding:0;min-height:0;font-size:12px;color:#555}
+
+/* White Liquid Glass: interface chrome only; scientific plots stay opaque. */
+:root{--glass:rgba(255,255,255,.76);--glass-line:rgba(55,60,65,.15);--glass-shadow:0 6px 22px rgba(25,30,35,.045),inset 0 1px 0 rgba(255,255,255,.95)}
+body{background:linear-gradient(120deg,#fff 0%,#f2f3f4 54%,#fafafa 100%) fixed}
+#workspace>header{background:var(--glass);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid var(--glass-line);box-shadow:0 2px 15px #00000003;gap:22px;padding:0 24px}
+#workspace>header nav{height:auto;gap:4px;align-items:center}
+#workspace>header nav button{height:36px;padding:0 12px;border:1px solid transparent;border-radius:9px;background:transparent}
+#workspace>header nav button.active{background:#292b2e;color:white;border-color:#292b2e;box-shadow:0 2px 5px #0001}
+#workspace>header nav button:not(.active):hover{background:rgba(255,255,255,.8);border-color:var(--glass-line)}
+button,.button{border-radius:8px;border-color:var(--glass-line);background:rgba(255,255,255,.85);box-shadow:inset 0 1px 0 #fff8}
+button:hover,.button:hover{background:#fff;border-color:#aeb1b5}
+button.primary,.primary{background:#292b2e;color:#fff;border-color:#292b2e;box-shadow:none}
+input,select,textarea{border-radius:7px;border-color:#c9ccd0;background:#fff}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:2px solid #626970;outline-offset:2px}
+/* Room for the focus ring on both axes, including overflow containers. */
+.graph-toolbar{padding:6px 5px 8px;margin:0 -5px 10px}
+#graphs .graph-toolbar button{border-radius:8px}
+#graphs .graph-toolbar [data-study][aria-pressed="true"]{box-shadow:none}
+#graphs .graph-toolbar [data-study]:focus-visible{outline-offset:2px}
+.controls,.home-card,.upload-panel,.authbox,.user-form,.graph-bottom-toggle,.fw-ribbon{background:var(--glass);border:1px solid var(--glass-line);border-radius:14px;box-shadow:var(--glass-shadow);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+.graph-control-menu button{border-radius:8px;background:rgba(255,255,255,.7)}
+.graph-control-menu button[aria-expanded="true"]{background:#e4e7e9;border-color:#bfc4c8}
+.graph-control-body{border-radius:9px;background:#fff}
+.chart-card{border-radius:10px;background:#fff;border-color:#d8dade}
+#figure svg,.table-scroll,table{background:#fff}
+.table-scroll{border-radius:10px;border-color:#d8dade}
+th{background:#f7f8f9}
+.graph-bottom-toggle>summary{background:rgba(245,246,247,.8)}
+dialog,#fcs dialog{border:1px solid rgba(255,255,255,.9);border-radius:16px;background:rgba(255,255,255,.95);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);box-shadow:0 20px 65px #18202822}
+dialog::backdrop{background:#18202833;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.graph-help>div,.page-help>div{border:1px solid var(--glass-line);border-radius:12px;background:rgba(255,255,255,.97);box-shadow:0 8px 30px #0001}
+.page-title{min-height:40px;gap:16px;margin-bottom:14px}
+.page-title button,.page-title .button,.page-toolbar>button,.page-toolbar .button,.page-actions button,.page-toolbar select,.page-toolbar input{height:40px;box-sizing:border-box;display:inline-flex;align-items:center;margin:0}
+.page-statusline{display:flex;align-items:center;gap:18px;min-height:24px;margin-bottom:10px}
+.page-statusline>p{margin:0;font-size:12px}
+.page-help{padding:0;border:0;margin-left:auto;position:relative;font-size:12px}
+.page-help>summary{color:#555}
+.page-help>div{position:absolute;z-index:30;right:0;top:28px;width:480px;max-width:75vw;padding:12px 16px}
+.page-help p{margin:0 0 8px;line-height:1.5}
+.page-help p:last-child{margin-bottom:0}
+.page-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:6px 5px 8px;margin:0 -5px 12px;min-height:54px}
+.page-toolbar .import-tabs{border:0;margin:0;gap:6px}
+.page-toolbar .import-tabs button{height:40px;padding:0 20px;border:1px solid var(--glass-line);border-radius:8px;background:rgba(255,255,255,.85);color:#333;font-weight:600}
+.page-toolbar .import-tabs button[aria-selected="true"]{background:#292b2e;color:#fff;border-color:#292b2e}
+.page-actions,.data-filters-inline{display:flex;align-items:center;gap:8px}
+.data-filters-inline #search{width:300px}
+#audit-search{width:360px}
+#import-current-file:empty{display:none}
+.upload-panel{padding:18px;margin-bottom:18px;border-style:dashed}
+.upload-panel label{margin:0}
+.user-form{padding:16px 18px;margin:0 0 16px;gap:16px}
+.user-form label{margin:0}
+.user-form input,.user-form select,.user-form button{height:40px;margin:0}
+#users>hr{margin:18px 0}
+.home-grid{gap:14px;margin:14px 0}
+.home-card{padding:20px}
+.event{background:rgba(255,255,255,.65);border:1px solid var(--glass-line);border-radius:10px;padding:12px 16px;margin-bottom:8px}
+#events{margin-top:12px}
+.sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+@supports not (backdrop-filter:blur(1px)){#workspace>header,.controls,.home-card,.authbox,.user-form,.upload-panel,dialog{background:#fff}}
+@media(prefers-reduced-transparency:reduce){#workspace>header,.controls,.home-card,.upload-panel,.authbox,.user-form,.graph-bottom-toggle,dialog,.fw-ribbon{background:#fff;backdrop-filter:none;-webkit-backdrop-filter:none}dialog::backdrop{backdrop-filter:none;-webkit-backdrop-filter:none}}
+
+/* Shared shapes and visible glass surfaces. Native Apple optics are approximated in CSS. */
+:root{--radius-panel:24px;--radius-inset:16px;--radius-field:14px;--radius-pill:999px;--glass:rgba(255,255,255,.56);--glass-line:rgba(100,110,120,.20);--glass-shadow:inset 0 1px 0 #fff,inset 0 -1px 0 #ffffff70,0 8px 24px #28344112,0 1px 3px #2834410a}
+body{background:radial-gradient(ellipse at 15% 10%,#fff 0%,transparent 50%),radial-gradient(ellipse at 90% 50%,#fff 0%,transparent 55%),linear-gradient(130deg,#f8f9fa,#e9ecef 55%,#f7f8f9) fixed}
+#workspace>header{background:linear-gradient(110deg,#ffffffc9,#ffffff70);box-shadow:inset 0 -1px 0 #fff,0 4px 20px #2834410b;backdrop-filter:blur(28px) saturate(130%);-webkit-backdrop-filter:blur(28px) saturate(130%)}
+#workspace>header nav{padding:4px;border:1px solid #ffffffc0;border-radius:var(--radius-pill);background:#ffffff50;box-shadow:inset 0 1px 0 #fff,0 2px 8px #2834410a}
+#workspace>header nav button,button,.button,.account button,.page-toolbar .import-tabs button,#graphs .graph-toolbar button{border-radius:var(--radius-pill)}
+input:not([type=checkbox]):not([type=radio]),select,textarea{border-radius:var(--radius-field)}
+.graph-selection-actions,.graph-export-actions{padding:8px;gap:8px;border:1px solid var(--glass-line);border-radius:28px;background:linear-gradient(135deg,#fffffff0,#ffffff65 55%,#ffffffb8);box-shadow:var(--glass-shadow);backdrop-filter:blur(22px) saturate(125%);-webkit-backdrop-filter:blur(22px) saturate(125%)}
+.graph-export-actions .graph-count-control{gap:8px;padding:0 8px 0 6px;margin-right:4px}
+#graphs .graph-toolbar button,.graph-count-control,.graph-count-control select{font-weight:700}
+#graphs .graph-toolbar [data-study]{border-radius:var(--radius-pill)}
+.graph-count-control select{border-radius:var(--radius-pill);background:#ffffffc9}
+.graph-toolbar{padding:8px 7px 12px;margin:0 -7px 8px}
+.controls,.home-card,.upload-panel,.authbox,.user-form,.graph-bottom-toggle,.fw-ribbon{border-radius:var(--radius-panel);background:linear-gradient(135deg,#ffffffdd,#ffffff75 60%,#ffffffbc);box-shadow:var(--glass-shadow);backdrop-filter:blur(24px) saturate(125%);-webkit-backdrop-filter:blur(24px) saturate(125%)}
+.graph-control-menu button,.graph-control-body,#graph-tabs button{border-radius:var(--radius-inset)}
+.graph-control-menu button{background:linear-gradient(#fffffff0,#ffffff8c);box-shadow:inset 0 1px 0 #fff,0 1px 2px #28344108}
+.graph-control-menu button[aria-expanded="true"]{background:linear-gradient(#e4e9eddf,#dbe1e6a8);box-shadow:inset 0 1px 0 #ffffffc0;border-color:#b8c1ca}
+.chart-card,.table-scroll,.event{border-radius:var(--radius-panel)}
+dialog,#fcs dialog{border-radius:28px}
+.graph-help>div,.page-help>div{border-radius:var(--radius-panel)}
+.graph-bottom-toggle>summary{border-radius:inherit}
+.graph-bottom-toggle[open]>summary{border-radius:var(--radius-panel) var(--radius-panel) 0 0}
+/* Grid rows take their tallest card's height, without fixing a board-wide height. */
+#figure{align-items:stretch}
+.chart-card{display:flex;flex-direction:column;align-self:stretch}
+.chart-plot{margin-top:auto}
+@supports not (backdrop-filter:blur(1px)){.graph-selection-actions,.graph-export-actions,#workspace>header,.controls,.home-card,.upload-panel,.authbox,.user-form,.graph-bottom-toggle,.fw-ribbon{background:#f9fafb}}
+@media(prefers-reduced-transparency:reduce){.graph-selection-actions,.graph-export-actions,#workspace>header,#workspace>header nav,.controls,.home-card,.upload-panel,.authbox,.user-form,.graph-bottom-toggle,.fw-ribbon{background:#fff;backdrop-filter:none;-webkit-backdrop-filter:none}}
+
+/* A pair of graphs occupies the visible viewport; wheel/trackpad snaps by row. */
+.graph-pair-nav{display:flex;align-items:center;gap:8px;margin-left:auto;flex-shrink:0}
+.graph-pair-nav button{width:28px;height:28px;padding:0;font-size:20px;line-height:1}
+.graph-pair-nav button:disabled{cursor:default}
+#graph-pair-status{font-size:12px;font-weight:700;min-width:92px;text-align:center}
+.graph-heading .graph-help{margin-left:0}
+#figure{height:var(--graph-view-height,600px);grid-auto-rows:var(--graph-view-height,600px);align-content:start;overflow-y:auto;overflow-x:hidden;scroll-snap-type:y mandatory;overscroll-behavior-y:contain;scrollbar-gutter:stable}
+#figure>.chart-card{height:100%;min-height:0;scroll-snap-align:start;scroll-snap-stop:always}
+#figure .chart-plot{flex:1;min-height:0;margin-top:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
+#figure .chart-plot svg{width:100%;height:100%;min-height:0;max-height:100%;object-fit:contain}
+#graphs .controls{max-height:var(--graph-view-height,600px);min-height:0}
+#graphs .graph-control-body{min-height:0;overflow-y:auto;overscroll-behavior-y:contain}
+@media(prefers-reduced-motion:reduce){#figure{scroll-behavior:auto}}
+
+/* Carry the glass panel shape through the expanded group-formatting section. */
+.graph-bottom-toggle>.palette-panel{background:transparent;border-radius:0 0 var(--radius-panel) var(--radius-panel);padding:14px}
+#global-colors{gap:10px}
+.global-group-card{border:1px solid var(--glass-line);border-radius:var(--radius-inset);padding:12px;background:linear-gradient(135deg,#fffffff0,#ffffffa6);box-shadow:inset 0 1px 0 #fff,0 2px 7px #28344108}
+.graph-bottom-toggle>summary:focus-visible{outline-offset:-3px}
+@media(prefers-reduced-transparency:reduce){.global-group-card{background:#fff}}
+
+/* Crisp boundaries for the two lower disclosures, without a diffuse halo. */
+.graph-bottom-toggle{overflow:hidden;isolation:isolate;border:1px solid #b8c0c8;background:#f7f8fa;box-shadow:0 2px 6px #2834410c;backdrop-filter:none;-webkit-backdrop-filter:none}
+.graph-bottom-toggle>summary{background:linear-gradient(180deg,#fff,#f0f3f5);border-radius:calc(var(--radius-panel) - 1px)}
+.graph-bottom-toggle[open]>summary{border-radius:calc(var(--radius-panel) - 1px) calc(var(--radius-panel) - 1px) 0 0;border-bottom:1px solid #cbd1d7}
+
+/* Shared controls across Import, Data, accounts, history and QA dialogs. */
+button,.button{font-weight:600}
+.page-toolbar button,.page-actions button,.page-title button,.user-form button,.authbox button,.dialog-top button{font-weight:700}
+input:not([type=checkbox]):not([type=radio]),select,textarea{border-color:#bac2ca;box-shadow:inset 0 1px 2px #28344105}
+input[type=file]{width:min(100%,560px);min-height:46px;padding:6px;font-size:12px;background:linear-gradient(180deg,#fff,#f7f9fa);border:1px solid #bac2ca;border-radius:var(--radius-panel);cursor:pointer;line-height:32px}
+input[type=file]::file-selector-button{font:700 12px/1.2 Arial,"Apple SD Gothic Neo",sans-serif;color:#24282c;height:32px;margin:0 12px 0 0;padding:0 16px;border:1px solid #bac2ca;border-radius:var(--radius-pill);background:linear-gradient(180deg,#fff,#eef1f4);box-shadow:inset 0 1px 0 #fff,0 1px 3px #2834410b;cursor:pointer}
+input[type=file]:hover::file-selector-button{background:#e8edf1;border-color:#929da7}
+input[type=file]:disabled,input[type=file]:disabled::file-selector-button{opacity:.55;cursor:not-allowed}
+input[type=checkbox],input[type=radio]{accent-color:#292b2e;cursor:pointer}
+button:disabled{cursor:default}
+dialog,#fcs dialog,.table-scroll,.user-form,.upload-panel,.fcs-upload,.event{border-color:#c0c7ce}
+.fcs-upload{border-radius:var(--radius-panel);background:linear-gradient(135deg,#fffffff0,#ffffffa6);box-shadow:0 2px 6px #2834410c}
+th{font-weight:700}
+.status{border-radius:var(--radius-pill);border-color:#bac2ca;padding:3px 8px;background:#f7f9fa}
+.source-row{align-items:center;gap:12px;border:1px solid #c7cdd3;border-radius:var(--radius-inset);margin:8px 0;background:#ffffffd9}
+.source-row>span{min-width:0;overflow-wrap:anywhere;margin-right:auto}
+.source-row>button,.source-row>a{flex-shrink:0}
+
+/* Navigation geometry stays unchanged when active state or page length changes. */
+html{scrollbar-gutter:stable}
+#workspace>header nav button,#workspace>header nav button.active{font-weight:700;flex-shrink:0}
+
+/* Long metric names must not expand a card or sidebar flex item. */
+.chart-metric-label{min-width:0}
+.chart-metric-label button,#choose-metric{display:block;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

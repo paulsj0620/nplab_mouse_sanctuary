@@ -20,7 +20,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install -r requirements/requirements.txt
-      - run: python -m unittest scripts.tests.test_accounts scripts.tests.test_import_review scripts.tests.test_login_history scripts.tests.test_statistical
+      - run: python -m unittest scripts.tests.test_security_hardening scripts.tests.test_account_http scripts.tests.test_accounts scripts.tests.test_import_review scripts.tests.test_login_history scripts.tests.test_statistical
       - run: node --test scripts/tests/js/test_chart.cjs scripts/tests/js/test_i18n.cjs
       - run: python scripts/deployment/alwaysdata.py
 
