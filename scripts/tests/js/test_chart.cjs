@@ -104,3 +104,29 @@ test('median identifies central mice, midpoint, ties, missing and exclusions',()
  x.mice[0].excluded=1;x.mice[3].excluded=1;summary=F.dataset(x,c).summaries[0];
  assert.equal(summary.median,null);assert.deepEqual(summary.median_mouse_ids,[]);
 });
+
+test('dated body weight appears in timeline and keeps real dates for mean/median/off',()=>{
+ const x=structuredClone(d);x.mice.push({mouse_id:'3',group_name:'A',excluded:0});
+ x.measurements=[...['2025-01-01','2025-01-15'].flatMap((timepoint,j)=>[10,20,60].map((value,i)=>({mouse_id:String(i+1),metric_id:1,timepoint,replicate:'1',value:value+j}))),{mouse_id:'1',metric_id:1,timepoint:'endpoint',replicate:'1',value:30}];
+ const choices=F.metricChoices(x,x.metrics);assert(choices.some(v=>v.view==='dated'));assert(choices.some(v=>v.view==='endpoint'));
+ const cfg={...c,type:'line',weightAxis:'date',comparisonMode:'none'};
+ const mean=F.render(x,{...cfg,trend:'mean'}),median=F.render(x,{...cfg,trend:'median'}),off=F.render(x,{...cfg,trend:'off'});
+ assert.deepEqual(mean.set.times,['2025-01-01','2025-01-15']);assert.equal(mean.set.records.length,6);assert.equal(mean.set.summaries[0].mean,30);assert.equal(mean.set.summaries[0].median,20);
+ assert.notEqual(mean.svg,median.svg);assert.match(off.svg,/Date trend: off/);assert.match(mean.svg,/>Date</);assert.equal(F.dateNumber('2025-02-30'),null);
+});
+test('weight timelines require one experiment and allow individual points on demand',()=>{
+ const x=structuredClone(d);x.mice[0].experiment='Exp2';x.mice[1].experiment='Exp3';
+ assert.throws(()=>F.render(x,{...c,type:'line',trend:'mean'}),/Select one experiment/);
+ const cfg={...c,type:'line',trend:'mean',experiment:'Exp2'};
+ assert.doesNotMatch(F.render(x,cfg).svg,/data-mouse=/);
+ assert.match(F.render(x,{...cfg,showIndividuals:true}).svg,/data-mouse="1"/);
+ assert.match(F.render(x,cfg).svg,/Exp2/);
+});
+test('timeline gives every measured date a tick and keeps points aligned with dates',()=>{
+ const x=structuredClone(d);x.measurements=x.measurements.map((r,i)=>({...r,timepoint:i<2?'2025-01-01':'2025-01-08'}));
+ const r=F.render(x,{...c,type:'line',weightAxis:'date',trend:'mean',showIndividuals:true,styles:{A:{shape:'circle',color:'#000000'}}});
+ assert.equal((r.svg.match(/data-axis-timepoint=/g)||[]).length,2);
+ const axis=Number(r.svg.match(/data-axis-timepoint="2025-01-01" d="M([\d.]+)/)[1]);
+ const point=r.svg.match(/<g data-mouse="1"[^>]*><title>[^<]*2025-01-01[^<]*<\/title><circle cx="([\d.]+)"/);
+ assert(point);assert.equal(Number(point[1]),axis);assert.match(r.svg,/data-timepoint="2025-01-01"/);
+});

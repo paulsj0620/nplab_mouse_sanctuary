@@ -451,3 +451,19 @@ Removed the Data page's obsolete Original roster link to /api/source/seed, which
 - Home 첫 줄에 Total mice / Mice with measurements / Mice without measurements 3개 카드 표시. 고유 roster ID 기준, 유한 숫자 측정값이 하나 이상 있는 마우스를 집계하며 0 포함·NULL 제외·반복 측정 중복 집계 없음.
 - 기존 Experiments/Metrics/Recorded values는 둘째 줄에 유지. 한영 번역 제공. 데이터에서 동적으로 계산하며 183/134/49를 하드코딩하지 않음.
 - 183/134/49 fixture와 0·반복값·결측값 확인, JS 문법 검증 통과. 코드만 변경, 운영 DB 변경 없음. 커밋/푸시/배포는 수행하지 않음.
+
+### 2026-11-10 — 날짜형 Body weight 추세선
+- 원인: 통합 Body weight timepoint가 ISO 날짜인데 기존 Weight-timeline 분류/line 렌더는 숫자 주차만 허용했다. ISO 날짜를 timeline의 dated view로 분류하고 실제 날짜 간격으로 X축 표시, numeric week와 date는 분리하여 처리한다. 임의 실험 주차 변환 없음.
+- Weight-timeline 선택 시 Mean 기본, Body weight trend에서 Mean/Median/Off 전환. weightAxis를 panel draft/config에 보존. 기존 endpoint 및 numeric week 기능 유지. 날짜축 라벨은 간격을 줄여 중첩 방지, 원본 시점은 모두 유지.
+- 실제 개발 체중 1,208개/59시점을 Mean/Median/Off 각각 렌더 확인. 날짜 유효성, endpoint 분리 및 중앙값/평균 구분 회귀검증 추가. JS 27개 통과. 데이터/운영 변경, 커밋/푸시 없음.
+
+### 2026-11-10 — 체중 타임라인 Exp 분리 및 가독성
+- 사용자 확정: 달력 날짜 유지, Exp별로 보기. 체중 line 선택/기존 빈 Exp draft 복원 시 첫 데이터 보유 Exp를 초기 선택하며 우측 Experiment에서 변경 가능. 여러 Exp를 동시에 묶으려 하면 안내문으로 차단, 날짜를 상대 주차로 변환하지 않음.
+- 체중 line 개체 점은 기본 숨김, Show individual body weights 토글로 표시. Mean/Median/Off 유지, Median 모드 중심 표식은 median 위치. SEM/SD 오차막대는 기존대로 평균 기준이며 footer에 Mean ± SEM/SD 표기.
+- 범례를 가용 폭에 따라 여러 줄로 배치하고 SVG 높이 확보, 부제에 Exp 표시.
+- 실제 Exp2/3/6 각각 렌더 확인, 혼합 Exp 차단 및 개체 점 토글 회귀 테스트 포함 JS 28개 통과. 원본/DB/운영 배포 변경 없음.
+
+### 2026-11-10 — 체중 날짜 눈금과 점 정렬
+- 기존 날짜 라벨 일부 생략으로 점/날짜 대응이 불명확했다. 모든 실제 측정 날짜에 눈금 표시, 날짜 글자만 가용 픽셀 간격에 맞춰 생략. 실제 날짜 간격은 유지.
+- line 개체 점의 가로 jitter 제거하여 측정일 X좌표에 정확히 정렬. 그룹 중심점에 날짜·Mean/Median·값·N 툴팁, 개체 점에도 날짜 추가.
+- 날짜 눈금 수와 실제 점 X좌표 일치 테스트 포함 chart 28개 통과. 데이터 수정/운영 배포 없음.

@@ -22,6 +22,8 @@ function weekNumber(label){
  const match=String(label).trim().match(/^(?:w(?:eeks?|k)?\s*[-_:]?\s*)?(\d+(?:\.\d+)?)\s*(?:w(?:eeks?|k)?)?$/i);
  return match?Number(match[1]):null;
 }
+function dateNumber(label){const text=String(label);if(!/^\d{4}-\d{2}-\d{2}$/.test(text))return null;const n=Date.parse(text+'T00:00:00Z');return Number.isFinite(n)&&new Date(n).toISOString().slice(0,10)===text?n/86400000:null;}
+function timeNumber(label){return dateNumber(label)??Number(label);}
 function isWeight(metric){
  return /^(?:body[ _-]*)?weight(?:$|[ _(-](?:g\b|timeline\b|endpoint\b))/i.test(metric?.name||'');
 }
@@ -60,7 +62,8 @@ function metricChoices(data,metrics){
   }else if(isWeight(metric)){
    const times=[...entry.times];
    if(times.some(t=>weekNumber(t)!==null))add(['Metabolic outcome','Weight-timeline'],'weekly');
-   if(times.some(t=>weekNumber(t)===null))add(['Metabolic outcome','Weight-endpoint'],'endpoint');
+   if(times.some(t=>dateNumber(t)!==null))add(['Metabolic outcome','Weight-timeline'],'dated');
+   if(times.some(t=>weekNumber(t)===null&&dateNumber(t)===null))add(['Metabolic outcome','Weight-endpoint'],'endpoint');
   }else if(/^(OGTT|ITT)\b/i.test(name)){
    add(['Metabolic outcome',name.match(/^(OGTT|ITT)/i)[0].toUpperCase()]);
   }else{
@@ -80,14 +83,18 @@ function metricChoices(data,metrics){
 function rowsForPanel(data,cfg){
  const weekly=cfg.type==='line'&&isWeight(data.metrics?.find(m=>m.id===Number(cfg.metric)));
  const rows=data.measurements.filter(r=>r.metric_id===Number(cfg.metric)&&(!cfg.replicate||r.replicate===cfg.replicate)&&(cfg.type==='line'||!cfg.timepoint||r.timepoint===cfg.timepoint));
- return weekly?rows.filter(r=>weekNumber(r.timepoint)!==null).map(r=>({...r,timepoint:String(weekNumber(r.timepoint))})):rows;
+ if(!weekly)return rows;
+ const dated=cfg.weightAxis==='date'||(!cfg.weightAxis&&!rows.some(r=>weekNumber(r.timepoint)!==null));
+ return dated?rows.filter(r=>dateNumber(r.timepoint)!==null):rows.filter(r=>weekNumber(r.timepoint)!==null).map(r=>({...r,timepoint:String(weekNumber(r.timepoint))}));
 }
 function dataset(data,cfg){
  const mice=data.mice.filter(m=>(!Array.isArray(cfg.scope_mouse_ids)||cfg.scope_mouse_ids.includes(m.mouse_id))&&(!Array.isArray(cfg.scope_experiments)||cfg.scope_experiments.includes(m.experiment))&&(!cfg.experiment||m.experiment===cfg.experiment)&&(!cfg.weeks||m.weeks===cfg.weeks));const byId=new Map(mice.map(m=>[m.mouse_id,m]));
  const records=rowsForPanel(data,cfg).filter(r=>byId.has(r.mouse_id));
+ if(cfg.type==='line'&&isWeight(data.metrics.find(m=>m.id===Number(cfg.metric)))&&new Set(records.map(r=>byId.get(r.mouse_id).experiment).filter(Boolean)).size>1)throw Error('Select one experiment for the body weight timeline in Graph settings.');
  let groups=[...new Set(mice.map(m=>m[cfg.grouping]||'Not specified'))];groups=groups.filter(g=>cfg.styles?.[g]?.include!==false).sort((a,b)=>(cfg.styles?.[a]?.order??0)-(cfg.styles?.[b]?.order??0));
- const times=cfg.type==='line'?[...new Set(records.map(r=>r.timepoint))].sort((a,b)=>Number(a)-Number(b)):[cfg.timepoint||'endpoint'];
- if(cfg.type==='line'&&times.some(t=>t.trim()===''||!Number.isFinite(Number(t))))throw Error('Time courses require numeric timepoints (e.g. 0, 15, 30, 60, 120).');
+ const times=cfg.type==='line'?[...new Set(records.map(r=>r.timepoint))].sort((a,b)=>timeNumber(a)-timeNumber(b)):[cfg.timepoint||'endpoint'];
+ if(cfg.type==='line'&&times.some(t=>t.trim()===''||!Number.isFinite(timeNumber(t))))throw Error('Time courses require numeric timepoints or ISO dates.');
+ if(cfg.type==='line'&&times.some(t=>dateNumber(t)!==null)&&times.some(t=>dateNumber(t)===null))throw Error('Dates and numeric timepoints cannot be mixed.');
  const summaries=[];
  for(const g of groups)for(const tp of times){const roster=mice.filter(m=>(m[cfg.grouping]||'Not specified')===g),ids=new Set(roster.map(m=>m.mouse_id));const rows=records.filter(r=>ids.has(r.mouse_id)&&(cfg.type!=='line'||r.timepoint===tp));const active=rows.filter(r=>!byId.get(r.mouse_id).excluded&&r.value!==null);if(new Set(active.map(r=>r.mouse_id)).size!==active.length)throw Error('Multiple replicates of a mouse are mixed. Select one replicate.');const missing=roster.filter(m=>!m.excluded&&!active.some(r=>r.mouse_id===m.mouse_id)).length;
  const present=new Set(rows.map(r=>r.mouse_id));const missing_values=roster.filter(m=>!m.excluded&&present.has(m.mouse_id)&&!active.some(r=>r.mouse_id===m.mouse_id)).length;
@@ -149,12 +156,13 @@ function render(data,cfg){
  const statisticalHeader=cfg.comparisonMode!=='none'&&analysis?.status==='ok'?formatP(analysis.anova.p,'ANOVA p')+' · Tukey-adjusted p-values':'';
  const W=Math.max(800,groups.length*(cfg.type==='line'?30:75)+140),fs=Math.max(10,Math.min(28,Number(cfg.font)||16));
  const title=cfg.title||metricTitle(metric),titleLines=wrapTitle(title,Math.floor((W-60)/((fs+5)*.6))),titleExtra=(titleLines.length-1)*(fs+7);
- const H=600+annotations.length*28+(statisticalHeader?30:0)+titleExtra,L=105,R=W-40,T=80+annotations.length*28+(statisticalHeader?30:0)+titleExtra,B=H-140;
+ const legendColumns=Math.max(1,Math.floor((W-145)/Math.max(130,...groups.map(g=>g.length*7+35)))),legendExtra=cfg.type==='line'?(Math.ceil(groups.length/legendColumns)-1)*24:0;
+ const H=600+legendExtra+annotations.length*28+(statisticalHeader?30:0)+titleExtra,L=105,R=W-40,T=80+annotations.length*28+(statisticalHeader?30:0)+titleExtra,B=H-140-legendExtra;
  const y=v=>B-(v-lo)/(hi-lo)*(B-T),xGroup=i=>L+(R-L)*(i+.5)/groups.length;
- const minX=times.length?Number(times[0]):0,maxX=times.length?Number(times[times.length-1]):1,xTime=t=>L+25+(R-L-50)*(Number(t)-minX)/(maxX-minX||1);
+ const minX=times.length?timeNumber(times[0]):0,maxX=times.length?timeNumber(times[times.length-1]):1,xTime=t=>L+25+(R-L-50)*(timeNumber(t)-minX)/(maxX-minX||1);
  const yt=cfg.ytitle||`${metric.name} (${metric.unit})`,clipId=`plot-clip-${W}-${H}-${T}`,clippedLowerErrorBars=summaries.filter(s=>s.mean!==null&&err(s)!==null&&s.mean-err(s)<lo).length;
  let svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}"><title>${esc(title)}</title><defs><clipPath id="${clipId}"><rect x="${L-1}" y="${T-1}" width="${R-L+2}" height="${B-T+1}"/></clipPath></defs><rect width="100%" height="100%" fill="white"/><g font-family="Arial, sans-serif" fill="black" font-size="${fs}"><text x="${W/2}" y="32" text-anchor="middle" font-size="${fs+5}" font-weight="bold">${titleLines.map((line,i)=>`<tspan x="${W/2}" y="${32+i*(fs+7)}">${esc(line)}</tspan>`).join('')}</text>`;
- if(!data.synthetic)svg+=`<text x="${W/2}" y="${53+titleExtra}" text-anchor="middle" font-size="10">${esc([metric.organ,gateName(metric.gate),cfg.type==='line'?'time series':cfg.timepoint,'replicate '+cfg.replicate].filter(Boolean).join(' · '))}</text>`;
+ if(!data.synthetic)svg+=`<text x="${W/2}" y="${53+titleExtra}" text-anchor="middle" font-size="10">${esc([cfg.experiment,metric.organ,gateName(metric.gate),cfg.type==='line'?'time series':cfg.timepoint,'replicate '+cfg.replicate].filter(Boolean).join(' · '))}</text>`;
  if(statisticalHeader)svg+=`<text x="${W/2}" y="${74+titleExtra}" text-anchor="middle" font-size="12">${esc(statisticalHeader)}</text>`;
  if(data.synthetic)svg+=`<text x="${W/2}" y="${53+titleExtra}" text-anchor="middle" font-size="11">Synthetic example · Not research results</text>`;
  svg+=`<path d="M${L} ${T}V${B}H${R}" fill="none" stroke="black" stroke-width="2"/><text transform="translate(28 ${(T+B)/2}) rotate(-90)" text-anchor="middle" font-weight="bold">${esc(yt)}</text>`;
@@ -166,16 +174,23 @@ function render(data,cfg){
  if(!/^#[0-9a-fA-F]{6}$/.test(st.color))st.color='#111111';
  if(cfg.type==='line'&&trend!=='off'){let path='',connected=false;for(const s of ss){if(s.mean===null){connected=false;continue;}path+=`${connected?'L':'M'}${xTime(s.timepoint)} ${y(trend==='median'?s.median:s.mean)} `;connected=true;}svg+=`<path d="${path}" fill="none" stroke="${st.color}" stroke-width="2"/>`;}
  for(const s of ss){const cx=cfg.type==='line'?xTime(s.timepoint):xGroup(i);svg+=bars(s,cx,st);
- if(cfg.type==='line'&&s.mean!==null)svg+=marker(cx,y(s.mean),st.shape,st.color,5,false);
- s.rows.filter(r=>r.value!==null&&(cfg.showExcluded||!byId.get(r.mouse_id).excluded)).forEach(r=>{const excluded=!!byId.get(r.mouse_id).excluded,hash=[...r.mouse_id].reduce((a,b)=>a*31+b.charCodeAt(0),0)>>>0,jitter=(hash%31-15)*(cfg.type==='line'?.3:1);svg+=`<g data-mouse="${esc(r.mouse_id)}" role="button" tabindex="0" aria-label="Mouse ${esc(r.mouse_id)}, ${r.value} ${esc(metric.unit)}${excluded?', Excluded':''}"><title>Mouse ${esc(r.mouse_id)} · ${r.value} ${esc(metric.unit)}</title>${marker(cx+jitter,y(r.value),st.shape,excluded?'#999':st.color,cfg.type==='line'?3.1:4.5,excluded)}</g>`;});
+ if(cfg.type==='line'&&s.mean!==null){const central=weekly&&trend==='median'?s.median:s.mean;svg+=`<g data-timepoint="${esc(s.timepoint)}" tabindex="0" role="img" aria-label="${esc(g+' · '+s.timepoint+' · '+(weekly&&trend==='median'?'Median':'Mean')+': '+central+' · n='+s.n)}"><title>${esc(g)} · ${esc(s.timepoint)} · ${weekly&&trend==='median'?'Median':'Mean'}: ${Number(central.toPrecision(5))} ${esc(metric.unit)} · n=${s.n}</title>${marker(cx,y(central),st.shape,st.color,5,false)}</g>`;}
+ s.rows.filter(r=>(!weekly||cfg.showIndividuals===true)&&r.value!==null&&(cfg.showExcluded||!byId.get(r.mouse_id).excluded)).forEach(r=>{const excluded=!!byId.get(r.mouse_id).excluded,hash=[...r.mouse_id].reduce((a,b)=>a*31+b.charCodeAt(0),0)>>>0,jitter=cfg.type==='line'?0:(hash%31-15);svg+=`<g data-mouse="${esc(r.mouse_id)}" role="button" tabindex="0" aria-label="Mouse ${esc(r.mouse_id)}, ${r.value} ${esc(metric.unit)}${excluded?', Excluded':''}"><title>Mouse ${esc(r.mouse_id)} · ${esc(r.timepoint)} · ${r.value} ${esc(metric.unit)}</title>${marker(cx+jitter,y(r.value),st.shape,excluded?'#999':st.color,cfg.type==='line'?3.1:4.5,excluded)}</g>`;});
  if(cfg.type!=='line'){const angle=-Number(cfg.angle||0);svg+=`<path d="M${cx} ${B}V${B+6}" stroke="black" stroke-width="2"/><text transform="translate(${cx} ${B+23}) rotate(${angle})" text-anchor="${angle?'end':'middle'}">${esc(g)}</text><text x="${cx}" y="${H-38}" text-anchor="middle" font-size="11">n=${s.n}</text>`;}}
- if(cfg.type==='line')svg+=`${marker(L+10+i*130,H-45,st.shape,st.color,4)}<text x="${L+20+i*130}" y="${H-40}" font-size="12">${esc(g)}</text>`;
+ if(cfg.type==='line')svg+=`${marker(L+10+(i%legendColumns)*((R-L)/legendColumns),B+95+Math.floor(i/legendColumns)*24,st.shape,st.color,4)}<text x="${L+20+(i%legendColumns)*((R-L)/legendColumns)}" y="${B+100+Math.floor(i/legendColumns)*24}" font-size="12">${esc(g)}</text>`;
  }
- if(cfg.type==='line'){for(const t of times)svg+=`<path d="M${xTime(t)} ${B}V${B+6}" stroke="black" stroke-width="2"/><text x="${xTime(t)}" y="${B+25}" text-anchor="middle">${esc(t)}</text>`;svg+=`<text x="${(L+R)/2}" y="${B+55}" text-anchor="middle" font-weight="bold">${esc(cfg.xtitle||(weekly?'Week':'Time (min)'))}</text>`;}
+ if(cfg.type==='line'){
+  const dated=times.some(t=>dateNumber(t)!==null),gap=dated?105:55;let last=-Infinity;
+  const labelled=new Set();
+  times.forEach((t,i)=>{const x=xTime(t),end=xTime(times[times.length-1]);if(i===0||i===times.length-1||(x-last>=gap&&end-x>=gap)){labelled.add(t);last=x;}});
+  for(const t of times){const x=xTime(t),major=labelled.has(t);svg+=`<path data-axis-timepoint="${esc(t)}" d="M${x} ${B}V${B+(major?7:4)}" stroke="black" stroke-width="${major?1.5:1}"><title>${esc(t)}</title></path>`;if(major)svg+=`<text x="${x}" y="${B+25}" text-anchor="middle">${esc(t)}</text>`;}
+  svg+=`<text x="${(L+R)/2}" y="${B+55}" text-anchor="middle" font-weight="bold">${esc(cfg.xtitle||(dated?'Date':weekly?'Week':'Time (min)'))}</text>`;
+ }
+
  annotations.forEach((a,i)=>{const x1=xGroup(groups.indexOf(a[0])),x2=xGroup(groups.indexOf(a[1])),yy=(statisticalHeader?100:70)+i*28+titleExtra;svg+=`<path d="M${x1} ${yy+5}V${yy}H${x2}V${yy+5}" stroke="black" stroke-width="1.5" fill="none"/><text x="${(x1+x2)/2}" y="${yy-5}" text-anchor="middle" font-size="14">${esc(a[2])}</text>`;});
- svg+=`<text x="${R}" y="${H-12}" text-anchor="end" font-size="10">${weekly?'Weekly trend: '+trend+' · ':''}Mean${cfg.error==='none'?'':' ± '+cfg.error} · one mouse per point${cfg.comparisonMode!=='none'&&analysis?.status==='ok'?' · '+esc(analysis.method)+' · adjusted p':''}${clippedLowerErrorBars?' · error bars below '+lo+' not shown':''}</text></g></svg>`;
+ svg+=`<text x="${R}" y="${H-12}" text-anchor="end" font-size="10">${weekly?(times.some(t=>dateNumber(t)!==null)?'Date trend: ':'Weekly trend: ')+trend+' · ':''}Mean${cfg.error==='none'?'':' ± '+cfg.error} · ${weekly&&cfg.showIndividuals!==true?'Individual values hidden':'one mouse per point'}${cfg.comparisonMode!=='none'&&analysis?.status==='ok'?' · '+esc(analysis.method)+' · adjusted p':''}${clippedLowerErrorBars?' · error bars below '+lo+' not shown':''}</text></g></svg>`;
  const axis={min:lo,max:hi,clippedLowerErrorBars,negativeMeasurements:observed.filter(v=>v<0).length,errorBelowZero:summaries.some(s=>s.mean!==null&&err(s)!==null&&s.mean-err(s)<0)};
  return {svg,summary:summaries.map(({rows,...s})=>s),set,title,analysis,coverage:set.coverage,axis};
 }
-const api={isWeight,weekNumber,metricChoices,stats,dataset,render,esc,gateName,sampleRows,sampleTree,composeFigures,groupKey,defaultGroupStyle,referencePalette,formatP,comparisonLabels,moveGroup,metricTitle};if(typeof module!=='undefined')module.exports=api;else root.Figure=api;
+const api={isWeight,weekNumber,dateNumber,metricChoices,stats,dataset,render,esc,gateName,sampleRows,sampleTree,composeFigures,groupKey,defaultGroupStyle,referencePalette,formatP,comparisonLabels,moveGroup,metricTitle};if(typeof module!=='undefined')module.exports=api;else root.Figure=api;
 })(typeof window!=='undefined'?window:globalThis);
