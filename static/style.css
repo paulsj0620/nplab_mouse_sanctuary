@@ -114,3 +114,10 @@
 #graph-tabs button {text-align:center;padding:6px 2px;font-size:12px;font-weight:600}
 #graph-tabs button::before {content:none}
 #graph-tabs button[aria-selected="true"] {background:#444;color:white;border-color:#444}
+
+.graph-bottom-toggle {margin-top:12px;border:.5px solid #ccc;border-radius:4px;background:white}
+.graph-bottom-toggle > summary {padding:12px;font-size:15px;font-weight:700;background:#f4f4f4}
+.graph-bottom-toggle > .palette-panel {margin:0;padding:12px;border:0}
+#summary {padding:0 12px}
+.graph-summary-item {overflow-x:auto;padding:8px 0;border-bottom:1px solid #eee}
+.graph-summary-item:last-child {border-bottom:0}

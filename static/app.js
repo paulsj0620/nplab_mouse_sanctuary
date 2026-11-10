@@ -133,14 +133,22 @@ function changePanelMetric(index,metricId,view=''){if(index===activePanel)rememb
  if(view==='endpoint'){panels[index].type='bar';panels[index].timepoint=current().measurements.find(r=>r.metric_id===metric.id&&Number.isFinite(r.value)&&Figure.weekNumber(r.timepoint)===null)?.timepoint||'endpoint';}
  activePanel=index;restorePanelControls();renderGraph();}
 function boardConfig(){rememberPanel();return {...cfg(),dashboard:{study:graphStudy,comparisonIds:comparisonIds===null?null:[...comparisonIds],panels:structuredClone(panels),count:graphCount,active:activePanel,palette:structuredClone(groupPalette),groupSettings:structuredClone(sharedGroups)}};}
-function switchExample(next){rememberPanel();boardCache[example?'demo':'real']={panels,activePanel,graphCount,groupPalette,sharedGroups};example=next;const saved=boardCache[example?'demo':'real'];panels=saved?.panels||[];activePanel=saved?.activePanel||0;graphCount=saved?.graphCount||4;groupPalette=saved?.groupPalette||Object.create(null);sharedGroups=saved?.sharedGroups||defaultSharedGroups();$('#example').textContent=example?'Return to study data':'Preview with example data';populate();}
+function switchExample(next){saveGraphDraft();rememberPanel();boardCache[example?'demo':'real']={panels,activePanel,graphCount,groupPalette,sharedGroups};example=next;const saved=boardCache[example?'demo':'real'];panels=saved?.panels||[];activePanel=saved?.activePanel||0;graphCount=saved?.graphCount||4;groupPalette=saved?.groupPalette||Object.create(null);sharedGroups=saved?.sharedGroups||defaultSharedGroups();$('#example').textContent=example?'Return to study data':'Preview with example data';restoreGraphDraft();populate();}
 function renderGraph(rebuild=true){if(!data)return;renderGraphTabs();rememberPanel();for(const panel of panels){panel.scope_experiments=studyExperiments();panel.scope_mouse_ids=studyMouseIds();}syncGroupStyles();const d=current();boardResults=[];const availableMetrics=graphMetrics(d);const choiceLabel=panel=>{const m=d.metrics.find(m=>String(m.id)===panel.metric);return m?metricLabel(m):(availableMetrics.length?'Select a metric':'No measurements');};
  $('#choose-metric').textContent=choiceLabel(panels[activePanel]);$('#choose-metric').disabled=!availableMetrics.length;
  $('#weekly-trend').hidden=!(Figure.isWeight(d.metrics.find(m=>String(m.id)===panels[activePanel].metric))&&panels[activePanel].type==='line');
  $('#figure').innerHTML=panelConfigs().map((panel,index)=>{let figure;try{figure=Figure.render(d,{...panel,analysis:panelAnalysis(panel)});}catch(error){figure={svg:'',error:true,summary:[],message:error.message};}boardResults.push(figure);const n=figure.set?new Set(figure.set.records.filter(r=>r.value!==null&&!figure.set.byId.get(r.mouse_id).excluded&&figure.set.groups.includes(figure.set.byId.get(r.mouse_id)[panel.grouping]||'Not specified')).map(r=>r.mouse_id)).size:0;return `<article class="chart-card ${index===activePanel?'is-active':''}" data-panel-index="${index}"><header class="chart-card-header"><button type="button" data-panel-focus="${index}" aria-label="Graph ${index+1} Settings" aria-pressed="${index===activePanel}"><b>${String.fromCharCode(65+index)} · Graph ${index+1}</b><span>${index===activePanel?'Active':'Settings'}</span></button><button type="button" data-panel-statistics="${index}">p-value</button><span class="chart-card-n">n=${n} · ${esc(panel.error==='none'?'Mean':panel.error)}</span></header><label class="chart-metric-label">Metric<button type="button" ${availableMetrics.length?'':'disabled'} aria-haspopup="dialog" data-choose-metric="${index}">${esc(choiceLabel(panel))}</button></label><div class="chart-coverage">${figure.coverage?`Missing ${figure.coverage.missing.length} · Unmeasured ${figure.coverage.unmeasured.length} · Excluded ${figure.coverage.excluded.length}`:''}<button type="button" data-panel-coverage="${index}">N details</button></div><div class="chart-range-note">${figure.axis?.clippedLowerErrorBars?`Y-axis starts at ${esc(figure.axis.min)} · Lower ${esc(panel.error)} error bars partly clipped`:""}</div><div class="chart-statistics" ${panel.comparisonMode==='none'?'hidden':''}>${panel.statMode==='anova-tukey'?(figure.analysis?.status==='ok'?esc(Figure.formatP(figure.analysis.anova.p,'ANOVA p'))+' · Tukey-adjusted p':esc(panelAnalysis(panel)?.message||'Calculating…')):'Calculating p-values…'}</div><div class="chart-plot">${figure.svg||`<p class="chart-error">${esc(figure.message)}</p>`}</div></article>`}).join('');
  if(metricPicker)drawMetricStep();
  lastFigure=boardResults[activePanel];$('#figure-status').textContent=example?`${graphCount} graphs · Synthetic example (not research results)`:`${graphCount} graphs · ${studyMouseIds().length} mice selected · Globally excluded ${d.mice.filter(m=>m.excluded).length} mice${sampleChanges.size?' · Previewing unsaved sample selection':''}`;
- $('#summary-label').textContent=`Graph ${activePanel+1} Summary`;$('#summary').innerHTML=lastFigure?.summary?.length?'<table><thead><tr><th>Group / Timepoint</th><th>n</th><th>Mean</th><th>SD</th><th>SEM</th><th>Missing</th><th>Unmeasured</th><th>Excluded</th></tr></thead><tbody>'+lastFigure.summary.map(s=>`<tr><td>${esc(s.group)}${cfg().type==='line'?' / '+esc(s.timepoint):''}</td><td>${s.n}</td><td>${fmt(s.mean)}</td><td>${fmt(s.sd)}</td><td>${fmt(s.sem)}</td><td>${s.missing_values}</td><td>${s.unmeasured}</td><td>${s.excluded}</td></tr>`).join('')+'</tbody></table>':'';const metric=d.metrics.find(m=>m.id===Number(panels[activePanel].metric));$('#measurement-unit-note').hidden=metric?.unit!=='a.u.';$('#measurement-unit-note').textContent='a.u. = arbitrary units of relative fluorescence intensity, not cell counts or concentrations. This file reports Geometric Mean.';renderSamples();renderComparison();renderPalette();renderStatistics();queueStatistics();}
+ $('#summary').innerHTML=boardResults.map((figure,index)=>{
+  const panel=panels[index],metric=d.metrics.find(m=>String(m.id)===String(panel.metric));
+  const heading='<h3>Graph '+(index+1)+(metric?' · '+esc(metricLabel(metric)):'')+'</h3>';
+  const rows=(figure.summary||[]).map(row=>[
+   esc(row.group)+(panel.type==='line'?' / '+esc(row.timepoint):''),row.n,fmt(row.mean),fmt(row.median),fmt(row.sd),fmt(row.sem),row.missing_values,row.unmeasured,row.excluded
+  ]);
+  return '<section class="graph-summary-item">'+heading+(rows.length?table(['Group / Timepoint','n','Mean','Median','SD','SEM','Missing','Unmeasured','Excluded'],rows):'<p>'+esc(figure.message||'No measurements')+'</p>')+'</section>';
+ }).join('');
+ const metric=d.metrics.find(m=>m.id===Number(panels[activePanel].metric));$('#measurement-unit-note').hidden=metric?.unit!=='a.u.';$('#measurement-unit-note').textContent='a.u. = arbitrary units of relative fluorescence intensity, not cell counts or concentrations. This file reports Geometric Mean.';renderSamples();renderComparison();renderPalette();renderStatistics();queueStatistics();saveGraphDraft();}
 function showCoverage(index){const figure=boardResults[index],coverage=figure?.coverage;if(!coverage)return;$('#coverage-title').textContent=`Graph ${String.fromCharCode(65+index)} · Sample count`;const metric=current().metrics.find(m=>m.id===Number(panels[index].metric));$('#coverage-details').innerHTML=`<p>${esc(metricLabel(metric))}</p><p>N includes mice with values for the selected groups, experiment, timepoint and replicate. Zero is a measured value. Each mouse counts once across timepoints.</p>`+[['measured','Measured (n)'],['missing','Missing: observation exists, but value is blank'],['unmeasured','Unmeasured: no observation for this metric/timepoint'],['excluded','Globally excluded, with or without a measured value']].map(([key,label])=>`<details ${key!=='measured'?'open':''}><summary>${esc(label)} · ${coverage[key].length} mice</summary><p>${coverage[key].length?coverage[key].map(id=>'Mouse '+esc(id)).join(', '):'None'}</p></details>`).join('');$('#coverage-dialog').showModal();}
 $('#coverage-close').onclick=()=>$('#coverage-dialog').close();
 function exportBoardSvg(){rememberPanel();if(!example&&panelConfigs().some((p,i)=>boardResults[i]?.svg&&p.comparisonMode!=='none'&&p.statMode==='anova-tukey'&&panelAnalysis(p)?.status==='pending'))throw Error('Wait for p-value calculations before exporting.');const svg=Figure.composeFigures(boardResults);const meta=esc(JSON.stringify({config:boardConfig(),metrics:current().metrics.filter(m=>panelConfigs().some(c=>Number(c.metric)===m.id)),revision:data.revision,statistical_results:boardResults.map(f=>f.analysis),coverage:boardResults.map(f=>f.coverage),axes:boardResults.map(f=>f.axis),pending_sample_selection:[...sampleChanges.values()],synthetic:example,exported_at:new Date().toISOString()}));return svg.replace(/(<svg\b[^>]*>)/,`$1<metadata>${meta}</metadata>`);}
@@ -245,9 +253,78 @@ function renderData(){const q=$('#search').value.toLowerCase(),kind=$('#table-ki
  $('#uploads').innerHTML=data.uploads.map(u=>`<div class="source-row"><span>${esc(u.filename)} · ${esc(u.uploaded_by)} · ${esc(new Date(u.created_at).toLocaleString('en-GB'))}</span><a href="/api/source/${u.id}">Download original</a>${user.role==='admin'||(user.role==='editor'&&user.username===u.uploaded_by)?`<button type="button" data-remove-upload="${esc(u.id)}">${document.documentElement.lang==='ko'?'가져오기 삭제':'Remove import'}</button>`:''}</div>`).join('')||'<p>No measurement files imported yet.</p>';
 }
 async function sync(silent=false){if(guest)return;try{const next=await api('/state');if(!data||next.revision!==data.revision){data=next;renderHomeSummary(data);populate();if(!silent)notice('Loaded the latest server data.');}$('#sync-state').textContent='Saved on server · Last checked '+new Date().toLocaleTimeString('en-GB');}catch(e){$('#sync-state').textContent='Disconnected. Check your connection before saving.';if(!silent)notice(e.message)}}
-async function start(){const state=await api('/me');if(guest)return;setup=state.setup_required;user=state.user;if(!user){$('#auth').hidden=false;$('#workspace').hidden=true;$('#auth-description').textContent=setup?'Create the first administrator account to manage lab users.':'Sign in with your lab account.';$('#login-button').textContent=setup?'Create administrator':'Sign in';if(setup&&!state.local_setup_allowed){$('#login-button').disabled=true;$('#auth-description').textContent='Set up the first administrator on the server computer using localhost.'}return;}$('#auth').hidden=true;$('#workspace').hidden=false;$('#account').textContent=user.username;$('#users-tab').hidden=user.role!=='admin';$('[data-page="fcs"]').hidden=!user.fcs_access;if(!user.fcs_access){$('#fcs').hidden=true;if($('[data-page="fcs"]').classList.contains('active'))$('[data-page="graphs"]')?.click();}data=await api('/state');populate();$('#sync-state').textContent='Connected to server';await renderHome();}
+let graphDraftReady=false;
+function graphDraftKey(){
+ return 'mouse-sanctuary-graph-v1-'+(guest?'guest':String(user?.id||user?.username))+'-'+(example?'example':'study');
+}
+function saveGraphDraft(){
+ if(!graphDraftReady||!data||(!user&&!guest))return;
+ try{
+  localStorage.setItem(graphDraftKey(),JSON.stringify({
+   schema:1,dashboard:boardConfig().dashboard,
+   pending:[...sampleChanges.values()],reason:$('#sample-reason').value
+  }));
+ }catch{
+  $('#sync-state').textContent='Graph draft could not be saved in this browser. Use Shared presets.';
+ }
+}
+function restoreGraphDraft(){
+ graphDraftReady=false;
+ try{
+  const draft=JSON.parse(localStorage.getItem(graphDraftKey())||'null'),board=draft?.dashboard;
+  if(draft?.schema!==1||!Array.isArray(board?.panels)||!board.panels.length||board.panels.length>8||
+   !board.panels.every(p=>p&&typeof p==='object'&&['bar','scatter','line'].includes(p.type))||
+   !Number.isInteger(board.count)||board.count<1||board.count>8||
+   !Number.isInteger(board.active)||board.active<0||board.active>=board.count)return;
+  panels=structuredClone(board.panels);graphCount=board.count;activePanel=board.active;
+  graphStudy=['all','basic','di','custom'].includes(board.study)?board.study:'all';
+  const ids=new Set(current().mice.map(m=>m.mouse_id));
+  comparisonIds=Array.isArray(board.comparisonIds)?new Set(board.comparisonIds.filter(id=>ids.has(id))):null;
+  groupPalette=Object.assign(Object.create(null),board.palette||{});
+  sharedGroups=Object.assign(defaultSharedGroups(),board.groupSettings||{});
+  sampleChanges.clear();
+  let conflicts=0;
+  for(const change of Array.isArray(draft.pending)?draft.pending:[]){
+   const mouse=data.mice.find(m=>m.mouse_id===change.mouse_id);
+   if(!mouse||mouse.version!==change.version){conflicts++;continue;}
+   if(typeof change.included==='boolean')sampleChanges.set(change.mouse_id,change);
+  }
+  $('#sample-reason').value=typeof draft.reason==='string'?draft.reason:'';
+  if(conflicts)notice('Some pending sample exclusions could not be restored because the saved mouse records changed. Review the latest samples.');
+ }catch{
+  notice('The saved graph draft could not be restored. Starting a new graph board.');
+ }finally{graphDraftReady=true;}
+}
+document.addEventListener('input',event=>{
+ if(event.target.closest('#graphs'))saveGraphDraft();
+});
+window.addEventListener('pagehide',saveGraphDraft);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')saveGraphDraft();});
+function storedPage(value){
+ const key='mouse-sanctuary-page-'+user.username;
+ try{
+  if(value!==undefined)sessionStorage.setItem(key,value);
+  return sessionStorage.getItem(key)||'home';
+ }catch{return 'home';}
+}
+function guestSession(value){
+ try{
+  if(value===false)sessionStorage.removeItem('mouse-sanctuary-guest');
+  else if(value===true)sessionStorage.setItem('mouse-sanctuary-guest','true');
+  return sessionStorage.getItem('mouse-sanctuary-guest')==='true';
+ }catch{return false;}
+}
+function allowedPage(page){
+ return !!document.getElementById(page)?.classList.contains('page')&&
+  (page!=='users'||user?.role==='admin')&&(page!=='fcs'||!!user?.fcs_access);
+}
+async function start(){const state=await api('/me');if(guest)return;setup=state.setup_required;user=state.user;if(!user){if(guestSession()){$('#guest-start').click();return;}$('#auth').hidden=false;$('#workspace').hidden=true;$('#auth-description').textContent=setup?'Create the first administrator account to manage lab users.':'Sign in with your lab account.';$('#login-button').textContent=setup?'Create administrator':'Sign in';if(setup&&!state.local_setup_allowed){$('#login-button').disabled=true;$('#auth-description').textContent='Set up the first administrator on the server computer using localhost.'}return;}$('#auth').hidden=true;$('#workspace').hidden=false;$('#account').textContent=user.username;$('#users-tab').hidden=user.role!=='admin';$('[data-page="fcs"]').hidden=!user.fcs_access;if(!user.fcs_access){$('#fcs').hidden=true;if($('[data-page="fcs"]').classList.contains('active'))$('[data-page="graphs"]')?.click();}data=await api('/state');restoreGraphDraft();populate();$('#sync-state').textContent='Connected to server';
+ const saved=storedPage(),page=allowedPage(saved)?saved:'home';
+ const button=[...document.querySelectorAll('[data-page]')].find(b=>b.dataset.page===page);
+ button?.click();
+}
 $('#guest-start').onclick=()=>{
- guest=true;example=true;user=null;data=demo;sampleChanges.clear();
+ guestSession(true);guest=true;example=true;user=null;data=demo;sampleChanges.clear();
  graphCount=4;activePanel=0;panels=[];comparisonIds=null;graphStudy='all';
  $('#auth').hidden=true;$('#workspace').hidden=false;
  $('#account').textContent='Guest';
@@ -256,13 +333,13 @@ $('#guest-start').onclick=()=>{
  $('#guest-banner').hidden=false;
  document.querySelectorAll('.page').forEach(p=>p.hidden=p.id!=='graphs');
  document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page==='graphs'));
- populate();showGraphControl('graph-settings-body');
+ restoreGraphDraft();populate();showGraphControl('graph-settings-body');
  $('#sync-state').textContent='Guest preview · Synthetic data';
 };
-$('#guest-exit').onclick=()=>location.reload();
+$('#guest-exit').onclick=()=>{guestSession(false);location.reload();};
 $('#login').onsubmit=async e=>{e.preventDefault();try{user=await api(setup?'/setup':'/login','POST',{username:$('#username').value,password:$('#password').value});$('#password').value='';await start()}catch(e){$('#auth-error').textContent=e.message}};
-$('#logout').onclick=async()=>{await api('/logout','POST',{});location.reload()};$('#refresh').onclick=()=>sync();
-document.addEventListener('click',async e=>{const nav=e.target.closest('[data-page]');if(nav){if(guest&&nav.dataset.page!=='graphs')return;if(nav.dataset.page==='graphs'&&$('#graphs').hidden)showGraphControl('graph-settings-body');document.querySelectorAll('.page').forEach(p=>p.hidden=p.id!==nav.dataset.page);document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b===nav));try{if(nav.dataset.page==='experiments')await renderExperiments();if(nav.dataset.page==='home'){await sync(true);await renderHome()}if(nav.dataset.page==='history'){audit=await api('/audit');renderAudit()}if(nav.dataset.page==='users')await renderUsers()}catch(e){notice(e.message)}}const m=e.target.closest('[data-edit-measure]');if(m)openEdit('measurement',Number(m.dataset.editMeasure));const mouse=e.target.closest('[data-edit-mouse],[data-mouse]');if(mouse){if(example&&mouse.hasAttribute('data-mouse')){notice('Synthetic examples cannot be edited. Click a real data point to exclude or restore a mouse globally.');return;}openEdit('mouse',mouse.dataset.editMouse||mouse.dataset.mouse)}});
+$('#logout').onclick=async()=>{await api('/logout','POST',{});guestSession(false);location.reload()};$('#refresh').onclick=()=>sync();
+document.addEventListener('click',async e=>{const nav=e.target.closest('[data-page]');if(nav){if(guest&&nav.dataset.page!=='graphs')return;if(!guest){if(!user||!allowedPage(nav.dataset.page))return;storedPage(nav.dataset.page);}if(nav.dataset.page==='graphs'&&$('#graphs').hidden)showGraphControl('graph-settings-body');document.querySelectorAll('.page').forEach(p=>p.hidden=p.id!==nav.dataset.page);document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b===nav));try{if(nav.dataset.page==='experiments')await renderExperiments();if(nav.dataset.page==='home'){await sync(true);await renderHome()}if(nav.dataset.page==='history'){audit=await api('/audit');renderAudit()}if(nav.dataset.page==='users')await renderUsers()}catch(e){notice(e.message)}}const m=e.target.closest('[data-edit-measure]');if(m)openEdit('measurement',Number(m.dataset.editMeasure));const mouse=e.target.closest('[data-edit-mouse],[data-mouse]');if(mouse){if(example&&mouse.hasAttribute('data-mouse')){notice('Synthetic examples cannot be edited. Click a real data point to exclude or restore a mouse globally.');return;}openEdit('mouse',mouse.dataset.editMouse||mouse.dataset.mouse)}});
 document.addEventListener('keydown',e=>{if(e.target.matches('[data-mouse]')&&['Enter',' '].includes(e.key)){e.preventDefault();e.target.dispatchEvent(new MouseEvent('click',{bubbles:true}))}});
 $('#example').onclick=()=>{if(sampleChanges.size){notice('Save or cancel pending sample selections before opening the example.');return;}switchExample(!example);};
 $('#metric').onchange=()=>changePanelMetric(activePanel,$('#metric').value);
