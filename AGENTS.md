@@ -644,3 +644,7 @@ Removed the Data page's obsolete Original roster link to /api/source/seed, which
 - 1100px 이하 Graph 설정은 그래프 아래로 배치, Home/metadata 2열; Gating 설정은 아래로 배치하며 이미지 영역 최소 420px, 목록 420px/설정 260px 내부 스크롤. FACS 도구 모음 줄바꿈. 700px 이하 Home/metadata 1열, toolbar 내부도 wrap.
 - 표의 내부 스크롤과 그래프 2개 단위 페이징은 유지. 문서 전체 overflow 숨김으로 문제를 가리지 않음.
 - mock 데이터 Chrome에서 1920/1400/1100/950/800/600px의 주요 8탭 document 가로 넘침 없음 확인. 950px Import 화면 캡처 확인. 실제 큰 표/이미지는 내부 스크롤 대상으로 별도 고려. 운영/DB 변경 없음.
+
+### 2026-11-11 — Compact Graph toolbar
+- 900–1400px viewport: Graph toolbar gap 8px; group padding 5px/gap 4px/min-height 44px; buttons 32px high, 10px bold; comparison button horizontal padding 5px, export 4px; count select 40×32px. Plot/font rendering is not scaled.
+- Chrome verified both groups share one baseline at 950/960/1100/1400px. At 900px and below insufficient space still wraps rather than clipping. 950px screenshot checked. Wider desktop retains normal 40px buttons/12px font. Data/production unchanged.

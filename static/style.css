@@ -441,3 +441,16 @@ footer{gap:8px 20px;overflow-wrap:anywhere}
  #fcs .fw-toolgroup{flex-wrap:wrap;min-width:0;max-width:100%}
  #fcs .fw-ribbon-note{white-space:normal}
 }
+/* Compact Graph toolbar for smaller desktop windows, without scaling plots. */
+@media(min-width:900px) and (max-width:1400px){
+ #graphs>.graph-toolbar{gap:8px}
+ #graphs .graph-selection-actions,#graphs .graph-export-actions{padding:5px;gap:4px;min-height:44px}
+ #graphs .graph-toolbar .import-tabs{gap:4px}
+ #graphs .graph-toolbar button{height:32px;padding:0 7px;font-size:10px}
+ #graphs .graph-count-control{font-size:10px;gap:4px;padding:0 2px;margin-right:0}
+ #graphs .graph-count-control select{height:32px;width:40px;padding:4px;font-size:10px}
+}
+@media(min-width:900px) and (max-width:1400px){
+ #graphs .graph-toolbar .import-tabs [data-study]{padding:0 5px}
+ #graphs .graph-export-actions button{padding:0 4px}
+}
