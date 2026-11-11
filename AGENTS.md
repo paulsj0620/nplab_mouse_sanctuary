@@ -6,7 +6,7 @@
 
 - 흰색·중성 회색의 Liquid Glass에서 영감을 받은 인터페이스. Apple의 실제 수치/광학 효과를 복제했다는 의미는 아니다. 과장된 색·장식보다 데이터와 조작의 가독성을 우선한다.
 - 유리 효과는 내비게이션, 도구 묶음, 설정 패널에 적용한다. 과학 그래프와 내보내는 그림은 불투명한 흰 배경을 유지한다. 축·점·오차막대·p-value에 블러를 적용하지 않는다.
-- 기본 대상은 1920×1080 데스크톱. 브라우저 도구 모음 때문에 실제 viewport는 더 작을 수 있으므로 높이를 1080px로 고정하지 않는다. 1280px·1100px 폭에서도 확인한다. 현재 body min-width는 1100px이며 모바일 UI는 별도 범위다.
+- 기본 대상은 1920×1080 데스크톱. 브라우저 도구 모음 때문에 실제 viewport는 더 작을 수 있으므로 높이를 1080px로 고정하지 않는다. 1280px·1100px 폭에서도 확인한다. body min-width는 0으로 창 축소를 허용한다. 600px까지 기본 재배치를 확인하되 전용 모바일 UX는 별도 범위다.
 - 각 탭은 바로 작업 메뉴/카드부터 시작한다. 중복 페이지 제목, 소개 문장 때문에 작업 영역을 아래로 밀지 않는다. 접근성용 제목은 `sr-only`로 유지 가능하다. 필드 설명·오류·단위·출처 정보는 삭제하지 않는다.
 - 현재 구현 위치: `static/style.css`(공통 외형), `static/index.html`(구조/스크립트), `static/app.js`(페이지/Graph/탭 전환), `static/tutorial.js`(Help), `static/strategies.js`(Gating).
 
@@ -638,3 +638,9 @@ Removed the Data page's obsolete Original roster link to /api/source/seed, which
 ### 2026-11-11 — Click navigation slide
 - Main navigation now has one animated selected pill; clicking/keyboard navigation slides its position and width to the active tab (260ms). Drag preview remains separate; hidden tabs, resize and translated labels resynchronize geometry. Reduced-motion disables animation.
 - Chrome verified active CSS transition and final target alignment, plus click/drag/Escape/keyboard regression checks. No data or production changes.
+
+### 2026-11-11 — 가변 창 너비 대응
+- body 1100px 최소 폭 제거. header는 자동 높이/min-height 70px, wrap. 1400px 이하에서는 nav를 별도 줄(order 3, 전체 폭)로 배치, 계정은 상단에 유지. 700px 이하에서는 계정도 별도 줄. nav 자체 wrap과 선택 막 ResizeObserver 유지.
+- 1100px 이하 Graph 설정은 그래프 아래로 배치, Home/metadata 2열; Gating 설정은 아래로 배치하며 이미지 영역 최소 420px, 목록 420px/설정 260px 내부 스크롤. FACS 도구 모음 줄바꿈. 700px 이하 Home/metadata 1열, toolbar 내부도 wrap.
+- 표의 내부 스크롤과 그래프 2개 단위 페이징은 유지. 문서 전체 overflow 숨김으로 문제를 가리지 않음.
+- mock 데이터 Chrome에서 1920/1400/1100/950/800/600px의 주요 8탭 document 가로 넘침 없음 확인. 950px Import 화면 캡처 확인. 실제 큰 표/이미지는 내부 스크롤 대상으로 별도 고려. 운영/DB 변경 없음.
