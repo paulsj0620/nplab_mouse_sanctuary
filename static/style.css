@@ -132,7 +132,7 @@
 .graph-help>div{position:absolute;z-index:20;right:0;top:26px;width:480px;max-width:75vw;background:white;border:1px solid #ccc;border-radius:4px;padding:12px 16px;box-shadow:0 4px 16px #0001}
 .graph-help p{margin:0 0 8px;line-height:1.5}
 .graph-help p:last-child{margin-bottom:0}
-.graph-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;overflow-x:auto;padding:2px 1px 6px;margin-bottom:10px}
+.graph-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;overflow:visible;flex-wrap:wrap;padding:2px 1px 6px;margin-bottom:10px}
 #graphs .graph-toolbar .import-tabs{margin:0;flex-shrink:0}
 .graph-export-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto}
 #graphs .graph-toolbar button{height:40px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;padding:0 13px;border-radius:4px;font-size:12px;line-height:1.2}
@@ -211,7 +211,7 @@ body{background:radial-gradient(ellipse at 15% 10%,#fff 0%,transparent 50%),radi
 #workspace>header nav{padding:4px;border:1px solid #ffffffc0;border-radius:var(--radius-pill);background:#ffffff50;box-shadow:inset 0 1px 0 #fff,0 2px 8px #2834410a}
 #workspace>header nav button,button,.button,.account button,.page-toolbar .import-tabs button,#graphs .graph-toolbar button{border-radius:var(--radius-pill)}
 input:not([type=checkbox]):not([type=radio]),select,textarea{border-radius:var(--radius-field)}
-.graph-selection-actions,.graph-export-actions{padding:8px;gap:8px;border:1px solid var(--glass-line);border-radius:28px;background:linear-gradient(135deg,#fffffff0,#ffffff65 55%,#ffffffb8);box-shadow:var(--glass-shadow);backdrop-filter:blur(22px) saturate(125%);-webkit-backdrop-filter:blur(22px) saturate(125%)}
+.graph-selection-actions,.graph-export-actions,#importer>.page-toolbar>.import-tabs,#data>.page-toolbar>.data-filters-inline,#data>.page-toolbar>.page-actions{padding:8px;gap:8px;border:1px solid var(--glass-line);border-radius:28px;background:linear-gradient(135deg,#fffffff0,#ffffff65 55%,#ffffffb8);box-shadow:var(--glass-shadow);backdrop-filter:blur(22px) saturate(125%);-webkit-backdrop-filter:blur(22px) saturate(125%)}
 .graph-export-actions .graph-count-control{gap:8px;padding:0 8px 0 6px;margin-right:4px}
 #graphs .graph-toolbar button,.graph-count-control,.graph-count-control select{font-weight:700}
 #graphs .graph-toolbar [data-study]{border-radius:var(--radius-pill)}
@@ -323,3 +323,72 @@ html{scrollbar-gutter:stable}
 
 /* Home: roster coverage first, then measurement statistics. */
 #home-summary{grid-template-columns:repeat(3,minmax(0,1fr))}
+
+/* Tabs begin with actionable content, with help and status kept nearby. */
+#home-summary{margin-top:0}
+.page>.page-toolbar:first-child{padding-top:0;margin-top:0}
+#graphs>.graph-toolbar:first-child{margin-top:0}
+#users>.user-form:first-child{margin-top:0}
+#fcs>.fw-ribbon:first-child{margin-top:0}
+
+/* Shared geometry: work-area cards and single-line toolbar controls. */
+#data .table-scroll,#history .event,#graphs .chart-card{border-radius:var(--radius-panel)}
+.page-toolbar input:not([type=checkbox]):not([type=radio]),.page-toolbar select{border-radius:var(--radius-pill)}
+#data .table-scroll{isolation:isolate}
+
+/* Shared grouped toolbars and rounded FACS work areas. */
+#importer>.page-toolbar>.import-tabs{display:flex;align-items:center;border-bottom:1px solid var(--glass-line);margin:0}
+#data>.page-toolbar>.data-filters-inline,#data>.page-toolbar>.page-actions{flex-wrap:wrap}
+#fcs{border:0;background:transparent}
+#fcs .fw-title{border:0;padding:10px 4px}
+#fcs .fw-workspace{gap:14px}
+#fcs .fw-sidebar,#fcs .fw-main{border:1px solid var(--glass-line);border-radius:var(--radius-panel);background:white;overflow:hidden}
+#fcs .fw-sidebar{box-shadow:var(--glass-shadow)}
+#fcs .fw-ribbon{border:1px solid var(--glass-line);border-radius:var(--radius-panel)}
+#fcs .fw-status{border:1px solid var(--glass-line);border-radius:var(--radius-inset);margin-top:10px}
+
+/* One toolbar baseline and outer contour across work tabs. */
+.page>.page-toolbar,#graphs>.graph-toolbar{padding:0 5px 8px;margin:0 -5px 12px;min-height:0;align-items:flex-start}
+#graphs .graph-toolbar .import-tabs{border:0;padding:0;gap:8px}
+#graphs .graph-selection-actions,#graphs .graph-export-actions,#importer>.page-toolbar>.import-tabs,#data>.page-toolbar>.data-filters-inline,#data>.page-toolbar>.page-actions{min-height:58px;border-radius:28px;align-items:center}
+
+/* Common Help position without shifting the toolbar baseline. */
+.page{position:relative}
+.page .page-help,.page .graph-help{position:absolute;top:-22px;right:0;margin:0;padding:0;border:0;z-index:40}
+.page .page-help>summary,.page .graph-help>summary{font-size:12px;line-height:18px;font-weight:700;color:#555}
+.page .page-help>div,.page .graph-help>div{top:22px;right:0;max-height:min(65vh,520px);overflow:auto}
+
+/* Help becomes an on-demand, read-only glass walkthrough. */
+.page .page-help,.page .graph-help{display:none}
+#tutorial-dialog{position:fixed;inset:0;width:100vw;max-width:none;height:100vh;max-height:none;margin:0;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;overflow:hidden;backdrop-filter:none;-webkit-backdrop-filter:none;color:#20252b}
+#tutorial-dialog::backdrop{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none}
+#tutorial-dialog .tour-glass{position:absolute;background:linear-gradient(125deg,#e8edf326,#f7faff38);backdrop-filter:blur(2px) saturate(105%);-webkit-backdrop-filter:blur(2px) saturate(105%);contain:paint}
+#tutorial-dialog .tour-highlight{position:absolute;border:2px solid #768da3;border-radius:20px;box-shadow:0 0 0 4px #ffffffb0,0 8px 32px #23364b22;pointer-events:none;transition:box-shadow .18s ease}
+#tutorial-dialog .tour-card{position:absolute;width:360px;max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);overflow:auto;padding:22px;border:1px solid #ffffffed;border-radius:24px;background:linear-gradient(140deg,#fffffffa,#edf3f8ed);box-shadow:inset 0 1px 0 white,0 18px 60px #23364b35;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
+#tutorial-dialog .tour-top,#tutorial-dialog .tour-actions{display:flex;align-items:center;justify-content:space-between;gap:12px}
+#tutorial-dialog .tour-top{margin-bottom:16px}#tutorial-dialog #tour-progress{font-size:12px;font-weight:700;color:#536171}
+#tutorial-dialog h2{font-size:20px;margin:0 0 10px}#tutorial-dialog p{font-size:14px;line-height:1.65;color:#424c57;margin:0 0 22px}
+#tutorial-dialog button:focus-visible{outline:3px solid #2563eb;outline-offset:3px}
+@media(prefers-reduced-motion:reduce){#tutorial-dialog .tour-highlight{transition:none}}
+@media(prefers-reduced-transparency:reduce){#tutorial-dialog .tour-glass{background:#edf1f5f5;backdrop-filter:none;-webkit-backdrop-filter:none}#tutorial-dialog .tour-card{background:#fff;backdrop-filter:none;-webkit-backdrop-filter:none}}
+
+/* Defined edges for navigation and grouped task controls. */
+#workspace>header nav,.graph-selection-actions,.graph-export-actions,#importer>.page-toolbar>.import-tabs,#data>.page-toolbar>.data-filters-inline,#data>.page-toolbar>.page-actions{border-color:#8997a5;box-shadow:inset 0 1px 0 #fff,inset 0 -1px 0 #ffffffa6,0 2px 4px #28344130,0 8px 18px #28344120}
+
+/* Unselected comparison controls share the Data field edge and inset shading. */
+#graphs .graph-toolbar [data-study][aria-pressed="false"]{border:1px solid #bac2ca;background:#fff;box-shadow:inset 0 1px 2px #28344105}
+
+/* Pointer-driven glass preview for the main navigation. */
+#workspace>header nav{position:relative;isolation:isolate;touch-action:pan-y;user-select:none}
+.nav-drag-indicator{display:none;position:absolute;pointer-events:none;border-radius:999px;border:1px solid #8b99a8;background:linear-gradient(145deg,#ffffffed,#dce5eccc);box-shadow:inset 0 1px 0 white,0 3px 10px #28344130;backdrop-filter:blur(12px);z-index:0}
+#workspace>header nav button{position:relative;z-index:1}
+#workspace>header nav.is-dragging{cursor:grabbing}
+#workspace>header nav.is-dragging .nav-drag-indicator:not([hidden]){display:block}
+#workspace>header nav.is-dragging button{cursor:grabbing;background:transparent;border-color:transparent;box-shadow:none;color:#292b2e}
+#workspace>header nav.is-dragging button.drag-candidate{color:#111}
+
+/* One sliding selected surface for pointer and keyboard tab changes. */
+#workspace>header nav .nav-selection-indicator{position:absolute;z-index:0;pointer-events:none;background:#292b2e;border-radius:999px;box-shadow:0 2px 5px #0001;transition:left .26s cubic-bezier(.22,1,.36,1),width .26s cubic-bezier(.22,1,.36,1),top .26s cubic-bezier(.22,1,.36,1),height .26s cubic-bezier(.22,1,.36,1)}
+#workspace>header nav button.active{background:transparent;border-color:transparent;box-shadow:none}
+#workspace>header nav.is-dragging .nav-selection-indicator{opacity:0}
+@media(prefers-reduced-motion:reduce){#workspace>header nav .nav-selection-indicator{transition:none}}

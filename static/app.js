@@ -645,3 +645,43 @@ $('#experiment-link-save').onclick=async()=>{const b=$('#experiment-link-save');
 $('#experiment-content').onclick=async e=>{try{const open=e.target.closest('[data-open-analysis]');if(open){document.querySelector('nav [data-page="fcs"]').click();await fcsRefresh();if(![...$('#fcs-runs').options].some(o=>o.value===open.dataset.openAnalysis)){const run=await api('/fcs/runs/'+open.dataset.openAnalysis);fcsCatalog.runs.unshift(run);$('#fcs-runs').add(new Option('Analysis '+run.id,run.id));}$('#fcs-runs').value=open.dataset.openAnalysis;await fcsLoadRun();return}const remove=e.target.closest('[data-remove-link]');if(remove){const link=experimentView.links.find(l=>String(l.id)===remove.dataset.removeLink);await api('/fcs/experiment-link','POST',{...link,remove:true,reason:$('#experiment-link-reason').value});await renderExperiments()}}catch(error){$('#experiment-message').textContent=error.message}};
 function updateMetadataMode(){const only=importKind==='meta'&&$('#metadata-only').checked;$('#column-mapping').hidden=only;}
 $('#mapping').addEventListener('change',updateMetadataMode);
+
+// Drag-to-select navigation: preview while held, navigate only on release.
+(()=>{
+ const nav=document.querySelector('#workspace>header nav');if(!nav)return;
+ const indicator=document.createElement('span');indicator.className='nav-drag-indicator';indicator.setAttribute('aria-hidden','true');nav.append(indicator);
+ const selection=document.createElement('span');selection.className='nav-selection-indicator';selection.setAttribute('aria-hidden','true');nav.append(selection);
+ let selectionReady=false;
+ function syncSelection(){
+  const target=nav.querySelector('button.active:not([hidden])');
+  if(!target||!target.getClientRects().length){selection.hidden=true;selectionReady=false;return;}
+  const bounds=nav.getBoundingClientRect(),rect=target.getBoundingClientRect();selection.hidden=false;
+  selection.style.transition=selectionReady?'':'none';
+  Object.assign(selection.style,{left:(rect.left-bounds.left-nav.clientLeft)+'px',top:(rect.top-bounds.top-nav.clientTop)+'px',width:rect.width+'px',height:rect.height+'px'});
+  if(!selectionReady){selection.getBoundingClientRect();selectionReady=true;selection.style.transition='';}
+ }
+ new MutationObserver(records=>{if(records.some(r=>r.target!==selection&&r.target!==indicator))syncSelection();}).observe(nav,{subtree:true,attributes:true,attributeFilter:['class','hidden'],childList:true,characterData:true});
+ new ResizeObserver(syncSelection).observe(nav);document.addEventListener('languagechange',syncSelection);syncSelection();
+ let gesture=null,suppressClick=false,timer;
+ const tabs=()=>[...nav.querySelectorAll('button[data-page]')].filter(b=>!b.hidden&&!b.disabled&&b.getClientRects().length);
+ function preview(x,y){
+  const bounds=nav.getBoundingClientRect(),buttons=tabs();
+  const target=y>=bounds.top-16&&y<=bounds.bottom+16&&x>=bounds.left&&x<=bounds.right?buttons.reduce((best,b)=>Math.abs(x-(b.getBoundingClientRect().left+b.offsetWidth/2))<Math.abs(x-(best.getBoundingClientRect().left+best.offsetWidth/2))?b:best,buttons[0]):null;
+  gesture.target=target;buttons.forEach(b=>b.classList.toggle('drag-candidate',b===target));
+  if(!target){indicator.hidden=true;return;}indicator.hidden=false;
+  const rect=target.getBoundingClientRect();indicator.style.width=rect.width+'px';indicator.style.height=rect.height+'px';indicator.style.top=(rect.top-bounds.top-nav.clientTop)+'px';
+  indicator.style.left=Math.max(4,Math.min(nav.clientWidth-rect.width-4,x-bounds.left-nav.clientLeft-rect.width/2))+'px';
+ }
+ function finish(commit){if(!gesture)return;const g=gesture;gesture=null;
+  nav.classList.remove('is-dragging');tabs().forEach(b=>b.classList.remove('drag-candidate'));indicator.hidden=true;
+  if(nav.hasPointerCapture(g.id))nav.releasePointerCapture(g.id);
+  if(g.dragging){suppressClick=true;clearTimeout(timer);timer=setTimeout(()=>suppressClick=false,0);if(commit&&g.target){g.target.focus({preventScroll:true});g.target.click();}}
+ }
+ nav.addEventListener('pointerdown',e=>{if(!e.isPrimary||e.button!==0||!e.target.closest('button[data-page]'))return;gesture={id:e.pointerId,x:e.clientX,y:e.clientY,dragging:false,target:null};});
+ nav.addEventListener('pointermove',e=>{if(!gesture||e.pointerId!==gesture.id)return;if(!gesture.dragging&&Math.hypot(e.clientX-gesture.x,e.clientY-gesture.y)<6)return;gesture.dragging=true;nav.setPointerCapture(e.pointerId);nav.classList.add('is-dragging');preview(e.clientX,e.clientY);e.preventDefault();});
+ nav.addEventListener('pointerup',e=>{if(gesture?.id!==e.pointerId)return;if(gesture.dragging)preview(e.clientX,e.clientY);finish(true);});
+ nav.addEventListener('pointercancel',()=>finish(false));nav.addEventListener('lostpointercapture',()=>finish(false));
+ nav.addEventListener('click',e=>{if(suppressClick&&e.isTrusted&&e.detail>0){e.preventDefault();e.stopImmediatePropagation();}},true);
+ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&gesture){finish(false);e.preventDefault();}});
+ window.addEventListener('blur',()=>finish(false));window.addEventListener('resize',()=>finish(false));
+})();

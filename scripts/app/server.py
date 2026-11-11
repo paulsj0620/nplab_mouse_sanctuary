@@ -73,7 +73,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.server.hosted and (path in ('/api/setup','/api/source/seed') or path.startswith('/api/fcs/')):
             raise Problem('Not available on this site.',404)
         if self.command=='GET' and not path.startswith('/api/'):
-            files={'/':'index.html','/app.js':'app.js','/i18n.js':'i18n.js','/study.js':'study.js','/chart.js':'chart.js','/style.css':'style.css','/fcs.js':'fcs.js','/strategies.js':'strategies.js','/mouse-cemetery.png':'mouse-cemetery.png'}
+            files={'/':'index.html','/app.js':'app.js','/i18n.js':'i18n.js','/study.js':'study.js','/chart.js':'chart.js','/style.css':'style.css','/fcs.js':'fcs.js','/strategies.js':'strategies.js','/tutorial.js':'tutorial.js','/mouse-cemetery.png':'mouse-cemetery.png'}
             if path not in files:raise Problem('Not found.',404)
             p=ROOT/'static'/files[path];return self.respond(200,p.read_bytes(),mimetypes.guess_type(p.name)[0]+('' if p.suffix=='.png' else '; charset=utf-8'))
         if self.command=='GET' and path=='/api/me':

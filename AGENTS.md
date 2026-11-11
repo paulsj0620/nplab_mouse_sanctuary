@@ -1,3 +1,118 @@
+# 재사용 디자인 규약 — 2026-11-11 확정
+
+이 절은 다른 페이지를 만들거나 기존 UI를 수정할 때 따르는 **현재 디자인 기준**이다. 아래의 날짜별 기록은 변경 이력이다. 과거의 8px/14px 카드, 강한 Help blur, 페이지별 Help 배치 등은 최종 기준이 아니다. 뒤에 있는 「2026-11-09 폴더 정리」 제한은 당시 폴더 정리 작업에 한정되며, 사용자가 요청한 UI 개발을 금지하는 전역 규칙이 아니다.
+
+## 1. 디자인 목적과 범위
+
+- 흰색·중성 회색의 Liquid Glass에서 영감을 받은 인터페이스. Apple의 실제 수치/광학 효과를 복제했다는 의미는 아니다. 과장된 색·장식보다 데이터와 조작의 가독성을 우선한다.
+- 유리 효과는 내비게이션, 도구 묶음, 설정 패널에 적용한다. 과학 그래프와 내보내는 그림은 불투명한 흰 배경을 유지한다. 축·점·오차막대·p-value에 블러를 적용하지 않는다.
+- 기본 대상은 1920×1080 데스크톱. 브라우저 도구 모음 때문에 실제 viewport는 더 작을 수 있으므로 높이를 1080px로 고정하지 않는다. 1280px·1100px 폭에서도 확인한다. 현재 body min-width는 1100px이며 모바일 UI는 별도 범위다.
+- 각 탭은 바로 작업 메뉴/카드부터 시작한다. 중복 페이지 제목, 소개 문장 때문에 작업 영역을 아래로 밀지 않는다. 접근성용 제목은 `sr-only`로 유지 가능하다. 필드 설명·오류·단위·출처 정보는 삭제하지 않는다.
+- 현재 구현 위치: `static/style.css`(공통 외형), `static/index.html`(구조/스크립트), `static/app.js`(페이지/Graph/탭 전환), `static/tutorial.js`(Help), `static/strategies.js`(Gating).
+
+## 2. 공통 수치와 색
+
+| 요소 | 확정 기준 |
+|---|---|
+| 큰 카드·Data 표 외곽·Edit History 이벤트·Graph 카드 | `--radius-panel:24px` |
+| 카드 내부 설정 블록·그룹별 색상 카드 | `--radius-inset:16px` |
+| 일반 입력 필드·textarea | `--radius-field:14px` |
+| 버튼·상단 단일행 입력/선택창·내비게이션 | `--radius-pill:999px` |
+| 메뉴 묶음·일반 dialog | radius 28px |
+| 메뉴 묶음 | padding 8px, gap 8px, min-height 58px, border 1px |
+| Graph/Import 작업 버튼 | height 40px; Graph padding `0 13px`, font-size 12px, weight 700 |
+| 내비게이션 | padding 4px, gap 4px; 버튼 height 36px, padding `0 12px`, weight 700 |
+| 기본 글꼴 | Arial, `Apple SD Gothic Neo`, sans-serif; body 14px / 1.55 |
+| 기본 버튼 / 주요 작업 버튼 | weight 600 / 700; 선택 전후 weight를 바꾸지 않는다 |
+| 입력창·Graph 미선택 비교 버튼 | border `#bac2ca`, inset shadow `inset 0 1px 2px #28344105` |
+| 상단 내비게이션·공통 메뉴 묶음 외곽 | border `#8997a5` 1px |
+| 일반 카드/표/dialog 경계 | `#c0c7ce` 또는 공통 `--glass-line`, 해당 기존 컴포넌트를 따름 |
+| 공통 glass line | `rgba(100,110,120,.20)` |
+| 기본 선택/주요 버튼 | `#292b2e`, 흰 글자; Graph 비교 버튼은 기존 선택 스타일 유지 |
+
+정확한 glass 표면 값:
+
+```css
+/* 공통 패널 */
+--glass: rgba(255,255,255,.56);
+--glass-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 #ffffff70,
+                0 8px 24px #28344112, 0 1px 3px #2834410a;
+/* 메뉴 묶음 배경 / blur */
+background: linear-gradient(135deg,#fffffff0,#ffffff65 55%,#ffffffb8);
+backdrop-filter: blur(22px) saturate(125%);
+/* 메뉴 묶음 + 상단 nav의 최종 그림자: 기본 패널 그림자보다 명확함 */
+box-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 #ffffffa6,
+            0 2px 4px #28344130, 0 8px 18px #28344120;
+/* 큰 glass 패널 */
+background: linear-gradient(135deg,#ffffffdd,#ffffff75 60%,#ffffffbc);
+backdrop-filter: blur(24px) saturate(125%);
+```
+
+- header 배경 `linear-gradient(110deg,#ffffffc9,#ffffff70)`, blur 28px / saturate 130%. 일반 패널과 header에 `-webkit-backdrop-filter`도 함께 사용한다.
+- body는 흰 radial 두 개와 `linear-gradient(130deg,#f8f9fa,#e9ecef 55%,#f7f8f9)`를 합친 fixed 배경이다. 새 페이지가 독자적으로 유색 배경을 추가하지 않는다.
+- Graph 미선택 비교 버튼은 흰 배경·입력창과 같은 경계/안쪽 음영이다. 바깥 메뉴 묶음의 경계와 안쪽 버튼 경계를 혼동하지 않는다.
+
+## 3. 레이아웃과 스크롤
+
+- `.page > .page-toolbar`, `#graphs > .graph-toolbar`: padding `0 5px 8px`, margin `0 -5px 12px`, min-height 0, align-items flex-start. 첫 메뉴의 위쪽 padding을 페이지마다 임의로 추가하지 않는다.
+- Graph 좌측 비교 버튼, 우측 개수/내보내기, Import META/FACS, Data 필터/내보내기 묶음은 공통 스타일을 공유한다. Graph 내부 `.import-tabs`에는 border/padding 0, gap 8px를 적용하여 외곽선 중복을 방지한다.
+- Graph toolbar는 `overflow:visible; flex-wrap:wrap`. **`overflow-x:auto`를 되살리지 말 것:** 다른 축의 visible도 auto로 계산되어 아래 그림자가 사각형으로 잘렸다. `overflow-y:visible`만 추가해도 해결되지 않는다. 폭이 부족하면 묶음을 다음 줄로 보낸다.
+- 스크롤은 표 본문·이미지 뷰포트·설정 본문처럼 필요한 내부에만 둔다. 외곽 그림자를 가진 부모에 무조건 overflow hidden을 주지 않는다. 내부 내용을 둥근 카드에 잘라야 한다면 외곽 그림자와 내부 clipping의 책임을 나눈다.
+- `html{scrollbar-gutter:stable}` 유지. 페이지 높이 변화로 상단 메뉴가 좌우로 움직이지 않아야 한다.
+- 긴 metric 버튼: `min-width:0; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap`. flex/grid 자식에도 min-width 0이 필요하다.
+- Graph는 한 화면에 두 그래프를 보여주고 행 단위 snap을 사용한다. 높이는 `max(300, floor(innerHeight - figureTop - 18))`로 산출해 `--graph-view-height`에 전달한다(기본값 600px). toolbar 높이가 변하면 다시 계산해야 한다.
+- Graph figure: overflow-y auto / x hidden, scroll-snap-type y mandatory, overscroll-behavior-y contain, scrollbar-gutter stable. 카드 height 100%, min-height 0, snap-align start / stop always. SVG는 width/height 100%로 비율 유지. 좌우 카드의 시작·끝과 sidebar 시작 높이를 함께 확인한다.
+- 하단 Group colors/Summary: radius 24px, border `#b8c0c8`, 배경 `#f7f8fa`, shadow `0 2px 6px #2834410c`, backdrop blur 없음. summary radius는 23px, 펼쳤을 때 하단 모서리는 0. 부모의 불필요한 세로 padding으로 흰 띠가 생기지 않게 한다.
+- Gating: 좌측 목록 190px / 중앙 `minmax(0,1fr)` / 우측 설정 310px, gap 14px. 목록·설정은 독립 스크롤, 중앙 Fit/zoom/pan. 선택 후 목록 scrollTop을 보존한다. zoom 버튼은 이미지 우측 상단의 작은 도구로 둔다.
+
+## 4. 클릭·드래그 탭 전환
+
+- DOM의 기존 `button[data-page]`와 권한 검사/페이지 전환 handler를 재사용한다. 새로운 드래그 코드에서 직접 페이지 hidden 상태를 임의로 바꾸지 않는다.
+- 클릭/키보드 선택: 하나의 `.nav-selection-indicator`가 이동한다. 색 `#292b2e`, radius 999px, shadow `0 2px 5px #0001`; left/top/width/height를 **260ms `cubic-bezier(.22,1,.36,1)`**로 변경한다. 콘텐츠 자체를 좌우로 미는 기능은 아니다.
+- nav는 relative/isolation isolate, 표시 막은 z-index 0·pointer-events none·aria-hidden, 버튼은 relative/z-index 1. 실제 active 버튼은 투명 배경으로 하고 글자 색은 유지한다.
+- 버튼 선택 여부로 padding/font-weight/테두리 두께가 바뀌면 인접 탭이 밀린다. 선택/비선택 모두 weight 700, 1px 투명 border 공간을 유지한다.
+- 드래그 임계 거리 6px. primary pointer/왼쪽 버튼에서 시작하고 임계 이동 후에만 pointer capture를 건다. pointerdown 즉시 capture하면 일반 클릭 대상이 nav로 바뀔 수 있다.
+- 드래그 중에는 미리보기만, 놓았을 때 기존 `.click()` 경로로 최종 이동한다. nav 좌우 범위 밖 또는 상하 16px 여유 밖에서 놓으면 취소. Esc, pointercancel/lost capture, 창 blur/resize도 취소한다.
+- 드래그 표시: radius 999px, border `#8b99a8`, 배경 `linear-gradient(145deg,#ffffffed,#dce5eccc)`, blur 12px, shadow `inset 0 1px 0 white,0 3px 10px #28344130`. 포인터에 즉시 따라가며 기존 선택 막은 잠시 숨긴다.
+- 드래그 직후 브라우저가 생성하는 trusted pointer click만 억제한다(`detail>0`). 프로그램 click/Enter 등 keyboard activation을 막지 않는다.
+- hidden/disabled 탭 제외. 언어·권한·크기 변화 후 실제 rect로 위치 재계산. 최초 배치는 애니메이션 없이 수행한다.
+- MutationObserver는 자신이 수정하는 indicator의 속성 변화를 무시해야 한다. hidden/style 변경을 다시 관찰해 무한 loop를 만들지 않는다. 기존 구현은 ResizeObserver 및 languagechange도 사용한다.
+- `prefers-reduced-motion:reduce`에서는 선택 막 transition을 끈다.
+
+## 5. Help 튜토리얼
+
+- Help 진입점은 header 계정 영역의 공통 버튼이다. 페이지별 도움말은 현재 숨기되 기존 동적 설명 ID를 함부로 삭제하지 않는다.
+- native modal dialog로 배경 조작/포커스를 제한한다. EN/KO, 이전·다음·완료·닫기, Esc, 종료 후 원래 포커스/스크롤 복원을 유지한다. 도움말은 데이터 쓰기·업로드·삭제를 실행하지 않는다.
+- 네 개의 `.tour-glass` 영역이 강조 대상 바깥만 덮는다. **dialog와 `::backdrop`은 모두 background transparent / backdrop-filter none**. 전역 dialog blur가 남으면 강조 메뉴도 흐려진다.
+- 주변 blur는 **2px**, saturate 105%, 배경 `linear-gradient(125deg,#e8edf326,#f7faff38)`. 기존 10px는 너무 강하다는 피드백으로 폐기했다.
+- 강조 영역은 대상 rect 바깥 6px. 모서리는 대상 computed corner radius를 읽고 실제 크기에 맞춰 percent/pill 값을 환산한 뒤 6px를 더한다. 고정 20px를 모든 요소에 쓰지 않는다(CSS fallback만 20px).
+- 강조선 2px `#768da3`, shadow `0 0 0 4px #ffffffb0,0 8px 32px #23364b22`. 위치/크기에 transition all을 걸지 않는다. 이전 단계 잔상이 생긴다.
+- 안내 카드 width 360px, max-width viewport−32px, padding 22px, radius 24px, max-height viewport−32px. 대상과 18px 간격으로 배치하고 안 맞으면 위/옆으로 이동한다. 제목 20px, 본문 14px/1.65, 진행 표시 12px/700.
+- 카드 자체 blur 24px는 유지 가능하지만 메뉴를 덮지 않아야 한다. 단계 대상이 숨김/없음이면 건너뛴다. resize/scroll 후 위치를 갱신한다.
+- reduced transparency에서는 불투명 배경+blur none으로 대체한다. 모션 감소 설정도 존중한다. focus-visible을 제거하지 않는다.
+
+## 6. 새 페이지에 적용하는 작업 순서
+
+1. 기존 컴포넌트와 최종 computed style을 먼저 확인한다. style.css에는 역사적인 중복 선언이 있으므로 첫 번째 일치만 보고 판단하지 않는다.
+2. 구조를 `작업 toolbar → 짧은 상태 정보 → 작업 본문`으로 만들고 공통 radius/toolbar 그룹을 재사용한다. 새 selector가 공통 규칙에서 빠지지 않게 한다.
+3. 기능용 ID, data 속성, 번역, 권한, 저장 상태는 보존한다. UI 정리만으로 DB/계정/원본/그래프 통계를 수정하지 않는다.
+4. blur·그림자는 바깥 셸, 콘텐츠 clipping은 내부로 구분한다. 양 축 overflow의 **계산된 값**을 확인한다. 사각형 그림자 단절은 border 색 변경으로 해결되지 않는다.
+5. 브라우저에서 기본/선택/hover/focus/펼침/접힘, 긴 영어·한국어, 빈 데이터·실제 데이터 상태를 확인한다. 사용자 사진이 모호하면 외곽선/내부선/그림자 clipping 중 무엇인지 확인한 뒤 수정한다.
+6. 변경된 CSS/JS의 index.html asset query version을 갱신한다. 실행 서버가 실제 파일을 제공하는지 확인하고, 캐시 때문이라고 근거 없이 단정하지 않는다.
+7. 새 JS 파일을 추가하면 server.py 정적 파일 매핑과 scripts/deployment/alwaysdata.py 코드 배포 allowlist도 확인한다. 개발 확인과 운영 배포를 구분하고, 요청 없이 commit/push/배포하지 않는다.
+8. AGENTS에는 새로운 확정 기준과 검증 결과를 반영한다. 단순히 예전 수치를 뒤에 누적해 상충하는 규칙으로 남기지 않는다.
+
+## 7. 완료 전 검증 기준
+
+- 1920×1080 및 실제 더 낮은 viewport, 폭 1280/1100에서 작업 버튼·그림자·focus ring이 잘리지 않는지 확인. 최상위 문서의 불필요한 가로 overflow가 없어야 한다.
+- Graph/Data/Import toolbar 시작선·둥근 외곽 높이 비교. 그래프 좌우 카드 높이/하단 N 라벨/범례와 sidebar 내부 접근성 확인.
+- 탭 클릭 시 실제 CSS transition 존재와 종료 rect가 버튼 rect에 1px 이내로 맞는지 확인. 클릭·드래그·드래그 취소·Enter·권한별 숨김·언어 전환을 점검한다.
+- Help는 강조 대상 선명도와 카드 viewport 내 배치, Esc/포커스 복귀, 언어 전환 확인. 읽기 전용 조작 중 API 쓰기 요청이 없어야 한다.
+- 자동 검사는 계산된 색/overflow/geometry와 동작을 확인하고 **스크린샷도 직접 확인**한다. 수치만 같아도 실제 그림자는 부모 clipping 때문에 다르게 보일 수 있다.
+- 테스트는 mock 또는 개발 데이터에서 수행한다. 운영 DB·계정·비밀번호·원본·QA 접근 제한은 유지한다. 디자인 규약 변경 자체는 운영 배포를 의미하지 않는다.
+
+---
+
 # 현재 우선 지침 — 2026-11-09 폴더 정리
 
 ## 문서 위치와 정리 기준
@@ -467,3 +582,59 @@ Removed the Data page's obsolete Original roster link to /api/source/seed, which
 - 기존 날짜 라벨 일부 생략으로 점/날짜 대응이 불명확했다. 모든 실제 측정 날짜에 눈금 표시, 날짜 글자만 가용 픽셀 간격에 맞춰 생략. 실제 날짜 간격은 유지.
 - line 개체 점의 가로 jitter 제거하여 측정일 X좌표에 정확히 정렬. 그룹 중심점에 날짜·Mean/Median·값·N 툴팁, 개체 점에도 날짜 추가.
 - 날짜 눈금 수와 실제 점 X좌표 일치 테스트 포함 chart 28개 통과. 데이터 수정/운영 배포 없음.
+
+### 2026-11-11 — 탭 시작 영역 통일
+- Home의 소개 문구를 제거하고 집계 카드로 시작, Refresh overview는 Workspace 작업 버튼 옆으로 이동.
+- Import/Data/Graph/Edit History는 작업 toolbar를 상태·Help보다 앞에 배치. Import의 동적 설명은 Help 안에 유지. User management는 사용자 추가 폼부터, FACS는 도구 ribbon부터 시작하고 QA 상태는 바로 아래에 유지.
+- Experiments 일반 소개와 사용자 관리 소개 제거, 반복 제목은 접근성용 sr-only로 유지. 필드 설명·오류·파일 제한·출처 정보는 삭제하지 않음.
+- 기존 element ID 및 개수 유지 확인. Chrome에서 Home/Import/Data/Graph/Edit History 이동, 한영 파일 선택 표시, 소개 숨김 및 화면 캡처 확인. 데이터/계정/운영 배포 변경 없음.
+
+### 2026-11-11 — Data/Edit History 곡률 통일
+- 큰 카드의 공통 24px radius-panel은 유지하고 Data 표/History 이벤트/Graph 카드에 동일 기준 명시.
+- 차이가 남아 있던 page-toolbar의 한 줄 검색창·선택창을 Graph 작업 버튼과 같은 radius-pill로 통일. 텍스트 영역·표 내부 셀·기능은 변경하지 않음.
+- 운영 배포 및 데이터 변경 없음.
+
+### 2026-11-11 — 공통 작업 메뉴 그룹 및 FACS 카드
+- Import META/FACS 탭, Data 검색/종류 선택 및 내보내기 버튼 그룹에 Graph 상단과 같은 CSS 규칙을 공유하여 padding·곡률·배경·테두리·그림자를 일치시켰다.
+- FACS 전체 페이지의 구형 직사각 외곽 border 제거. 도구 ribbon 및 sidebar/main 작업 영역은 공통 radius-panel로 분리, 내부 스크롤/도구 기능 유지.
+- Chrome에서 Import/Data/FACS 캡처 및 곡률·외곽 border 확인, 기존 탭 이동/한영 파일 선택 테스트 통과, 브라우저 오류 없음. DB·QA 권한·운영 배포 변경 없음.
+
+### 2026-11-11 — 상단 작업 메뉴 기준선 정렬
+- Graph에만 남아 있던 8px 상단 padding 및 다른 좌우 음수 margin을 page-toolbar와 공통 규칙으로 통일.
+- Import/Data/Graph 그룹 외곽 높이 58px, radius 28px, 내부 padding 8px. Graph 내부 탭 border를 제거해 외곽 곡선 시작/끝 높이를 맞춤.
+- Chrome 1920×1080에서 Import/Data/Graph 외곽 좌표 모두 x=92,y=95,height=58 확인. 탭 이동/파일 선택/언어 전환 검증 통과. 운영 배포·DB 변경 없음.
+
+### 2026-11-11 — Help 공통 위치
+- 모든 page의 Help를 페이지 기준 우측 상단(top:-22px,right:0) 여백에 배치하여 메뉴 시작 높이는 그대로 유지. 펼친 도움말은 같은 오른쪽 기준으로 열리며 긴 내용은 내부 스크롤.
+- Home/Experiments/Gating/FACS에도 해당 작업용 Help 추가. 기존 Graph/Import/Data/History/Users 설명 및 동적 안내 ID는 유지.
+- Chrome에서 주요 8개 탭 모두 summary 위치 x=1209.28125,y=73 일치, 펼침/닫힘 및 기존 파일 선택·언어 전환 확인. 운영 배포/DB 변경 없음.
+
+### 2026-11-11 — Liquid Glass Help 튜토리얼
+- 페이지 사이에 끼어 있던 Help는 숨기고 상단 계정 영역의 공통 Help 버튼으로 대체. 기존 동적 안내 DOM ID는 보존.
+- static/tutorial.js: 현재 탭별 단계 안내(한국어/영어), 화면 전체 glass blur overlay와 강조 대상의 선명한 spotlight, 이전/다음/완료/닫기 및 Esc. 실제 입력·업로드·gate 수정·저장 동작을 실행하지 않음. 숨김/없는 대상은 건너뜀.
+- native modal dialog로 배경 상호작용/포커스 제한, 종료 시 원래 버튼 포커스/문서 스크롤 복원. resize/scroll 시 위치 갱신, reduced motion/transparency 지원. 기존 dialog backdrop blur는 튜토리얼에서 해제해 대상까지 흐려지는 문제 방지.
+- Chrome 1920×1080에서 8개 탭 순회, 안내 카드 화면 내 배치, 다음/이전, Esc, 포커스 복원, 한국어 및 API 쓰기 요청 0 검증. 실제 캡처 검토 완료. 배포 allowlist 및 정적 라우트 추가, 패키지 preview 통과. 개발 서버 재시작, 운영 배포/DB 변경 없음.
+
+### 2026-11-11 — Tutorial spotlight refinement
+- Reduced surrounding blur to 2px and retained blur-free dialog/backdrop so highlighted controls stay readable.
+- Spotlight corner radii now follow each target computed corner radius plus the 6px outer gap, instead of a fixed 20px radius. Percentage/pill radii resolve against target dimensions.
+- Asset query versions refreshed. Development UI only; no production deployment or database changes.
+
+### 2026-11-11 — Clearer grouped menu edges
+- Header navigation and shared Graph/Import/Data toolbar groups use a darker neutral border and a short contact shadow plus soft outer shadow. Preserved 1px border thickness, dimensions, corner radii and selected states.
+- Development CSS only; no database or production changes.
+
+- Follow-up: confirmed live development server serves grouped border rules; increased edge contrast to #8997a5 and contact/outer shadow opacity for visibility on Graph white background. Cache version glass-edge-5.
+
+- Clarification: user meant the inner Data fields versus Graph comparison buttons, not outer group borders. Matched unselected Graph comparison button border (#bac2ca) and inset shadow to Data fields; selected dark state preserved.
+
+### 2026-11-11 — Graph toolbar shadow clipping fix
+- Root cause: graph-toolbar overflow-x:auto implicitly made overflow-y:auto, clipping group shadows at a rectangular scroll container edge. Changed toolbar to overflow:visible and flex-wrap:wrap so narrow desktop layouts wrap control groups without clipping shadows. Border styling unchanged. No database/production changes.
+
+### 2026-11-11 — Main navigation drag selection
+- Added pointer drag preview to the top navigation; glass indicator follows pointer, destination commits on release using existing navigation/permission handlers. Ordinary click and keyboard activation preserved. Hidden/disabled tabs excluded; Escape, pointer cancellation, resize and leaving the navigation cancel selection.
+- Browser checks passed for click, drag preview without early navigation, release navigation, Escape and keyboard; no API writes/browser errors. Development only, no deployment or data changes.
+
+### 2026-11-11 — Click navigation slide
+- Main navigation now has one animated selected pill; clicking/keyboard navigation slides its position and width to the active tab (260ms). Drag preview remains separate; hidden tabs, resize and translated labels resynchronize geometry. Reduced-motion disables animation.
+- Chrome verified active CSS transition and final target alignment, plus click/drag/Escape/keyboard regression checks. No data or production changes.
