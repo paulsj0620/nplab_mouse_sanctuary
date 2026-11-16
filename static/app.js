@@ -646,42 +646,185 @@ $('#experiment-content').onclick=async e=>{try{const open=e.target.closest('[dat
 function updateMetadataMode(){const only=importKind==='meta'&&$('#metadata-only').checked;$('#column-mapping').hidden=only;}
 $('#mapping').addEventListener('change',updateMetadataMode);
 
-// Drag-to-select navigation: preview while held, navigate only on release.
-(()=>{
- const nav=document.querySelector('#workspace>header nav');if(!nav)return;
- const indicator=document.createElement('span');indicator.className='nav-drag-indicator';indicator.setAttribute('aria-hidden','true');nav.append(indicator);
- const selection=document.createElement('span');selection.className='nav-selection-indicator';selection.setAttribute('aria-hidden','true');nav.append(selection);
- let selectionReady=false;
- function syncSelection(){
-  const target=nav.querySelector('button.active:not([hidden])');
-  if(!target||!target.getClientRects().length){selection.hidden=true;selectionReady=false;return;}
-  const bounds=nav.getBoundingClientRect(),rect=target.getBoundingClientRect();selection.hidden=false;
-  selection.style.transition=selectionReady?'':'none';
-  Object.assign(selection.style,{left:(rect.left-bounds.left-nav.clientLeft)+'px',top:(rect.top-bounds.top-nav.clientTop)+'px',width:rect.width+'px',height:rect.height+'px'});
-  if(!selectionReady){selection.getBoundingClientRect();selectionReady=true;selection.style.transition='';}
- }
- new MutationObserver(records=>{if(records.some(r=>r.target!==selection&&r.target!==indicator))syncSelection();}).observe(nav,{subtree:true,attributes:true,attributeFilter:['class','hidden'],childList:true,characterData:true});
- new ResizeObserver(syncSelection).observe(nav);document.addEventListener('languagechange',syncSelection);syncSelection();
- let gesture=null,suppressClick=false,timer;
- const tabs=()=>[...nav.querySelectorAll('button[data-page]')].filter(b=>!b.hidden&&!b.disabled&&b.getClientRects().length);
- function preview(x,y){
-  const bounds=nav.getBoundingClientRect(),buttons=tabs();
-  const target=y>=bounds.top-16&&y<=bounds.bottom+16&&x>=bounds.left&&x<=bounds.right?buttons.reduce((best,b)=>Math.abs(x-(b.getBoundingClientRect().left+b.offsetWidth/2))<Math.abs(x-(best.getBoundingClientRect().left+best.offsetWidth/2))?b:best,buttons[0]):null;
-  gesture.target=target;buttons.forEach(b=>b.classList.toggle('drag-candidate',b===target));
-  if(!target){indicator.hidden=true;return;}indicator.hidden=false;
-  const rect=target.getBoundingClientRect();indicator.style.width=rect.width+'px';indicator.style.height=rect.height+'px';indicator.style.top=(rect.top-bounds.top-nav.clientTop)+'px';
-  indicator.style.left=Math.max(4,Math.min(nav.clientWidth-rect.width-4,x-bounds.left-nav.clientLeft-rect.width/2))+'px';
- }
- function finish(commit){if(!gesture)return;const g=gesture;gesture=null;
-  nav.classList.remove('is-dragging');tabs().forEach(b=>b.classList.remove('drag-candidate'));indicator.hidden=true;
-  if(nav.hasPointerCapture(g.id))nav.releasePointerCapture(g.id);
-  if(g.dragging){suppressClick=true;clearTimeout(timer);timer=setTimeout(()=>suppressClick=false,0);if(commit&&g.target){g.target.focus({preventScroll:true});g.target.click();}}
- }
- nav.addEventListener('pointerdown',e=>{if(!e.isPrimary||e.button!==0||!e.target.closest('button[data-page]'))return;gesture={id:e.pointerId,x:e.clientX,y:e.clientY,dragging:false,target:null};});
- nav.addEventListener('pointermove',e=>{if(!gesture||e.pointerId!==gesture.id)return;if(!gesture.dragging&&Math.hypot(e.clientX-gesture.x,e.clientY-gesture.y)<6)return;gesture.dragging=true;nav.setPointerCapture(e.pointerId);nav.classList.add('is-dragging');preview(e.clientX,e.clientY);e.preventDefault();});
- nav.addEventListener('pointerup',e=>{if(gesture?.id!==e.pointerId)return;if(gesture.dragging)preview(e.clientX,e.clientY);finish(true);});
- nav.addEventListener('pointercancel',()=>finish(false));nav.addEventListener('lostpointercapture',()=>finish(false));
- nav.addEventListener('click',e=>{if(suppressClick&&e.isTrusted&&e.detail>0){e.preventDefault();e.stopImmediatePropagation();}},true);
- document.addEventListener('keydown',e=>{if(e.key==='Escape'&&gesture){finish(false);e.preventDefault();}});
- window.addEventListener('blur',()=>finish(false));window.addEventListener('resize',()=>finish(false));
+// A small, local lens over the navigation labels. No page snapshots or data plots.
+// The decorative SVG copies text only; real Shiny tabs retain all interaction.
+window.SanctuaryNavGlass = (() => {
+  const ns = 'http://www.w3.org/2000/svg';
+  const svgNode = (name, attrs = {}) => {
+    const node = document.createElementNS(ns, name);
+    Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, value));
+    return node;
+  };
+  function create(nav, indicator) {
+    const svg = svgNode('svg', {class: 'nav-glass-svg', 'aria-hidden': 'true', focusable: 'false'});
+    indicator.setAttribute('data-no-translate', '');
+    const defs = svgNode('defs');
+    const filter = svgNode('filter', {id: 'sanctuary-nav-refraction', filterUnits: 'userSpaceOnUse',
+      primitiveUnits: 'userSpaceOnUse', x: 0, y: 0, 'color-interpolation-filters': 'sRGB'});
+    const map = svgNode('feImage', {result: 'lens-map', preserveAspectRatio: 'none', x: 0, y: 0});
+    const warp = svgNode('feDisplacementMap', {in: 'SourceGraphic', in2: 'lens-map', scale: 18,
+      xChannelSelector: 'R', yChannelSelector: 'G'});
+    filter.append(map, warp); defs.append(filter);
+    const refracted = svgNode('g', {filter: 'url(#sanctuary-nav-refraction)'});
+    const scene = svgNode('g'); refracted.append(scene); svg.append(defs, refracted); indicator.append(svg);
+    const maps = new Map();
+    let size = '', enabled = false;
+    const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches ||
+      matchMedia('(prefers-reduced-transparency: reduce)').matches;
+    function displacement(width, height) {
+      const key = `${width}:${height}`;
+      if (maps.has(key)) return maps.get(key);
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      const context = canvas.getContext('2d');
+      if (!context) return null;
+      const pixels = context.createImageData(width, height), radius = height / 2;
+      for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+        // Surface normals of a capsule: flat middle, rounded ends. The rim bends
+        // more strongly than the center, unlike a uniform blur or wavy noise.
+        const dx = x + .5 - Math.max(radius, Math.min(width - radius, x + .5));
+        const dy = y + .5 - radius, distance = Math.hypot(dx, dy);
+        const rim = Math.max(0, Math.min(1, (distance / radius - .38) / .62));
+        const bend = Math.sin(rim * Math.PI / 2) ** 2;
+        const i = (y * width + x) * 4;
+        pixels.data[i] = Math.round(127.5 + 115 * dx / (distance || 1) * bend);
+        pixels.data[i + 1] = Math.round(127.5 + 115 * dy / (distance || 1) * bend);
+        pixels.data[i + 2] = 128; pixels.data[i + 3] = 255;
+      }
+      context.putImageData(pixels, 0, 0);
+      const url = canvas.toDataURL();
+      // At most the few current tab sizes; language changes cannot grow this forever.
+      if (maps.size >= 16) maps.clear();
+      maps.set(key, url); return url;
+    }
+    function begin(tabs) {
+      enabled = !reduced();
+      indicator.classList.toggle('has-refraction', enabled);
+      scene.replaceChildren();
+      if (!enabled) return;
+      const bounds = nav.getBoundingClientRect();
+      tabs.forEach(tab => {
+        const rect = tab.getBoundingClientRect(), style = getComputedStyle(tab);
+        const label = svgNode('text', {
+          x: rect.left - bounds.left - nav.clientLeft + rect.width / 2,
+          y: rect.top - bounds.top - nav.clientTop + rect.height / 2,
+          'text-anchor': 'middle', 'dominant-baseline': 'central', fill: '#292b2e',
+          'font-family': style.fontFamily, 'font-size': style.fontSize, 'font-weight': style.fontWeight,
+          'letter-spacing': style.letterSpacing
+        });
+        label.textContent = tab.textContent.trim(); scene.append(label);
+      });
+    }
+    function move(left, top, width, height, light) {
+      if (!enabled) return;
+      const w = Math.round(width), h = Math.round(height), key = `${w}:${h}`;
+      if (key !== size) {
+        const url = displacement(w, h);
+        if (!url) { enabled = false; indicator.classList.remove('has-refraction'); return; }
+        svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+        for (const node of [filter, map]) { node.setAttribute('width', w); node.setAttribute('height', h); }
+        map.setAttribute('href', url);
+        map.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', url);
+        size = key;
+      }
+      // Magnify around the moving lens center, then curve only the rim.
+      scene.setAttribute('transform', `translate(${w / 2} ${h / 2}) scale(1.14 1.10) translate(${-w / 2 - left} ${-h / 2 - top})`);
+      indicator.style.setProperty('--glass-light', `${Math.round(light * 100)}%`);
+    }
+    function end() { enabled = false; scene.replaceChildren(); indicator.classList.remove('has-refraction'); }
+    return {begin, move, end};
+  }
+  return {create};
+})();
+
+// Keep the existing app navigation and permission path for clicks and drag release.
+(() => {
+  function initialize() {
+    const nav = document.querySelector('#workspace>header nav');
+    if (!nav || nav.classList.contains('nav-enhanced')) return;
+    const indicator = document.createElement('span');
+    indicator.className = 'nav-drag-indicator';
+    indicator.hidden = true;
+    const selection = document.createElement('span');
+    selection.className = 'nav-selection-indicator';
+    for (const node of [indicator, selection]) {
+      node.setAttribute('aria-hidden', 'true');
+      node.setAttribute('role', 'presentation');
+      nav.append(node);
+    }
+    const glass = window.SanctuaryNavGlass?.create(nav, indicator);
+    let ready = false, gesture = null, suppressClick = false, timer;
+    const tabs = () => [...nav.querySelectorAll('button[data-page]')].filter(a =>
+      a.getClientRects().length && !a.disabled && !a.closest('[hidden], .disabled') && a.getAttribute('aria-disabled') !== 'true');
+    function syncSelection() {
+      const target = tabs().find(a => a.classList.contains('active'));
+      if (!target) { selection.hidden = true; ready = false; return; }
+      const bounds = nav.getBoundingClientRect(), rect = target.getBoundingClientRect();
+      selection.hidden = false;
+      selection.style.transition = ready ? '' : 'none';
+      Object.assign(selection.style, {
+        left: `${rect.left - bounds.left - nav.clientLeft}px`,
+        top: `${rect.top - bounds.top - nav.clientTop}px`, width: `${rect.width}px`, height: `${rect.height}px`
+      });
+      if (!ready) { selection.getBoundingClientRect(); ready = true; selection.style.transition = ''; }
+    }
+    nav.classList.add('nav-enhanced');
+    nav.addEventListener('dragstart', e => e.preventDefault());
+    new MutationObserver(records => {
+      if (records.some(r => r.target !== selection && !indicator.contains(r.target))) syncSelection();
+    }).observe(nav, {subtree: true, attributes: true, attributeFilter: ['class','hidden','style','aria-disabled'], childList: true, characterData: true});
+    new ResizeObserver(syncSelection).observe(nav);
+    document.addEventListener('languagechange', () => { finish(false); syncSelection(); });
+    syncSelection();
+    function preview(x, y) {
+      const bounds = nav.getBoundingClientRect(), buttons = tabs();
+      const inside = x >= bounds.left && x <= bounds.right && y >= bounds.top - 16 && y <= bounds.bottom + 16;
+      // Distance to rectangles also handles navigation wrapped onto multiple rows.
+      const distance = a => { const r = a.getBoundingClientRect(); return Math.hypot(Math.max(r.left-x,0,x-r.right), Math.max(r.top-y,0,y-r.bottom)); };
+      const target = inside && buttons.length ? buttons.reduce((best,a) => distance(a) < distance(best) ? a : best) : null;
+      gesture.target = target;
+      indicator.hidden = !target;
+      if (!target) return;
+      const rect = target.getBoundingClientRect();
+      const {width, height} = gesture;
+      const left = Math.max(2, Math.min(nav.clientWidth-width-2, x-bounds.left-nav.clientLeft-width/2));
+      const top = rect.top-bounds.top-nav.clientTop-2;
+      Object.assign(indicator.style, {width: `${width}px`, height: `${height}px`, top: `${top}px`, left: `${left}px`});
+      glass?.move(left, top, width, height, Math.max(0, Math.min(1, (x-bounds.left-left)/width)));
+    }
+    function finish(commit) {
+      if (!gesture) return;
+      const previous = gesture; gesture = null;
+      nav.classList.remove('is-dragging'); indicator.hidden = true; glass?.end();
+      if (nav.hasPointerCapture(previous.id)) nav.releasePointerCapture(previous.id);
+      if (previous.dragging) {
+        suppressClick = true; clearTimeout(timer); timer = setTimeout(() => suppressClick = false, 0);
+        if (commit && previous.target) { previous.target.focus({preventScroll:true}); previous.target.click(); }
+      }
+      syncSelection();
+    }
+    nav.addEventListener('pointerdown', e => {
+      if (!e.isPrimary || e.button !== 0 || !tabs().includes(e.target.closest('button[data-page]'))) return;
+      const rect = e.target.closest('button[data-page]').getBoundingClientRect();
+      // Keep the grabbed lens size for the entire gesture, even over longer labels.
+      gesture = {id:e.pointerId, x:e.clientX, y:e.clientY, width:rect.width+8, height:rect.height+4, dragging:false, target:null};
+    });
+    nav.addEventListener('pointermove', e => {
+      if (!gesture || e.pointerId !== gesture.id) return;
+      if (!gesture.dragging && Math.hypot(e.clientX-gesture.x,e.clientY-gesture.y) < 6) return;
+      if (!gesture.dragging) {
+        gesture.dragging = true; nav.setPointerCapture(e.pointerId); nav.classList.add('is-dragging');
+        glass?.begin(tabs());
+      }
+      preview(e.clientX,e.clientY); e.preventDefault();
+    });
+    nav.addEventListener('pointerup', e => { if (gesture?.id !== e.pointerId) return; if (gesture.dragging) preview(e.clientX,e.clientY); finish(true); });
+    nav.addEventListener('pointercancel', () => finish(false));
+    nav.addEventListener('lostpointercapture', () => finish(false));
+    nav.addEventListener('click', e => { if (suppressClick && e.isTrusted && e.detail > 0) { e.preventDefault(); e.stopImmediatePropagation(); } }, true);
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && gesture) { finish(false); e.preventDefault(); } });
+    window.addEventListener('blur', () => finish(false));
+    window.addEventListener('resize', () => { finish(false); syncSelection(); });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initialize); else initialize();
 })();

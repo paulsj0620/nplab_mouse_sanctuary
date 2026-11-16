@@ -648,3 +648,15 @@ Removed the Data page's obsolete Original roster link to /api/source/seed, which
 ### 2026-11-11 — Compact Graph toolbar
 - 900–1400px viewport: Graph toolbar gap 8px; group padding 5px/gap 4px/min-height 44px; buttons 32px high, 10px bold; comparison button horizontal padding 5px, export 4px; count select 40×32px. Plot/font rendering is not scaled.
 - Chrome verified both groups share one baseline at 950/960/1100/1400px. At 900px and below insufficient space still wraps rather than clipping. 950px screenshot checked. Wider desktop retains normal 40px buttons/12px font. Data/production unchanged.
+
+### 2026-11-16 — Drag glass refraction
+- Drag indicator now uses a local SVG backdrop displacement filter (smoothed low-frequency noise, scale 8), blur 0.5px, saturation 135%, bright rim/inset shading, and a pointer-position-dependent radial reflection. This supersedes the earlier plain 12px-blur drag surface. Labels remain above the lens and sharp. No external assets or continuous animation loop.
+- SVG backdrop support varies by browser; prefixed 1px blur/135% saturation and CSS highlights supply the fallback. Reduced-transparency uses an opaque surface without refraction. This is a web approximation, not Apple's native renderer.
+- Chrome computed SVG backdrop filter verified; header screenshot inspected; drag preview does not navigate until release and release navigation passes without browser errors. Existing unrelated working-tree edits preserved. Development only; no deployment or DB changes.
+
+### 2026-11-16 — singlecell_explorer 메뉴 효과 통일 (최신 렌즈 기준)
+- 사용자 지정 참조: /Users/paul/WorkInProgress/singlecell_explorer/www/nav-glass.js 및 navigation.js, style.css의 raised drag lens. 앞선 noise/backdrop refraction 구현을 교체했다. 원본 참조 프로젝트는 수정하지 않았다.
+- nav-glass 로직을 app.js에 함께 포함: SVG에 메뉴 글자만 장식용으로 복사하고 capsule normal 기반 displacement map으로 가장자리를 굴절한다. scale 18, 중심 확대 1.14×1.10, map cache 최대 16개. 데이터/플롯 캡처는 하지 않는다. SVG aria-hidden/pointer-events none, 실제 버튼의 기존 클릭/권한 경로 유지.
+- 렌즈는 최초 잡은 버튼 width+8px / height+4px를 드래그 내내 유지. 다른 긴 탭을 지나도 너비가 바뀌지 않는다. 6px 임계값, rect 거리 기반 후보 선택으로 여러 줄 nav 지원. 클릭 pill은 기존 260ms 이동 유지.
+- reduced motion 또는 reduced transparency이면 굴절·복제 글자 효과를 사용하지 않는다. languagechange/resize/cancel/Esc 시 드래그 정리. Observer가 렌즈 자식 SVG 변경을 다시 관찰해 loop하지 않도록 제외한다.
+- Chrome 검증: 렌즈 생성·드래그 중 비이동·놓은 후 이동·긴 탭 위 고정 폭·모션 감소/취소 및 오류 없음 확인, header 캡처 검토. 코드만 변경, 운영 배포/DB 변경 없음.
