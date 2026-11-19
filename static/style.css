@@ -478,3 +478,25 @@ footer{gap:8px 20px;overflow-wrap:anywhere}
   #workspace>header nav .nav-drag-indicator.has-refraction { z-index: 0; background: #fff; }
   #workspace>header nav .nav-drag-indicator.has-refraction::after, .has-refraction > .nav-glass-svg { display: none; }
 }
+
+#survival-dialog{width:min(1500px,calc(100vw - 32px));max-height:calc(100vh - 32px);padding:22px;background:#f8fafb}#survival-content{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.survival-card{min-width:0;background:white;border:1px solid #bac2ca;border-radius:24px;padding:14px}.survival-card svg{width:100%;height:auto}.survival-actions{display:flex;gap:8px}.survival-card details{padding:12px 0}.survival-card [data-tip]{cursor:default}.survival-card [data-tip]:focus{outline:2px solid #2563eb}#survival-tooltip{position:fixed;z-index:2;background:#fff;border:1px solid #8997a5;border-radius:16px;box-shadow:0 6px 24px #28344130;padding:12px;white-space:pre-line;font-size:12px;max-width:340px;max-height:65vh;overflow:auto;pointer-events:none}@media(max-width:1000px){#survival-content{grid-template-columns:minmax(0,1fr)}}
+
+#survival-dialog{backdrop-filter:none;-webkit-backdrop-filter:none}#survival-tooltip{max-height:min(400px,60vh);pointer-events:auto}
+
+#graphs.infection-mode>.graph-heading,#graphs.infection-mode>.graph-layout,#graphs.infection-mode .graph-export-actions{display:none!important}
+#survival-open{border:1px solid #bac2ca;background:#fff;color:#333;font-weight:700}
+#survival-open[aria-pressed="true"]{background:#222;color:#fff;border-color:#222}
+#infection-view{min-width:0}#infection-view #survival-content{display:block;max-width:1100px;margin:auto}
+.infection-toolbar{display:flex;align-items:center;gap:20px;margin:12px 0}.infection-toolbar label{flex-direction:row;align-items:center;margin:0;font-weight:700}.infection-toolbar select{width:120px;border-radius:999px}
+#infection-view .survival-card svg{display:block;max-height:none;min-height:0}
+#infection-view #survival-tooltip{z-index:100}
+
+#infection-view .survival-card details .table-scroll{max-height:260px;overflow:auto}
+
+/* Infection uses the full work area with a persistent click inspector. */
+#infection-view #survival-content{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:22px;max-width:none;margin:0;align-items:start}
+.survival-inspector{min-width:0;max-height:var(--infection-panel-height,600px);overflow:auto;padding:18px;border:1px solid #bac2ca;border-radius:24px;background:linear-gradient(135deg,#fffffff0,#f1f4f7);box-shadow:var(--glass-shadow)}
+.survival-inspector h3{margin:0 0 14px;font-size:15px}.survival-inspector p{white-space:pre-line;font-size:12px;margin:6px 0 0;line-height:1.65}
+.survival-point-overview{padding-bottom:14px;border-bottom:1px solid #cbd1d7}.survival-mouse-info{padding:14px 0;border-bottom:1px solid #dce1e5}.survival-mouse-info:last-child{border-bottom:0}.survival-mouse-info strong{font-size:12px}
+#infection-view [data-tip]{cursor:default}#infection-view [data-tip][aria-pressed="true"]>circle:first-child{stroke:#647b94;stroke-width:2;fill:#647b9415}
+@media(max-width:800px){#infection-view #survival-content{grid-template-columns:minmax(0,1fr)}.survival-inspector{max-height:360px}}

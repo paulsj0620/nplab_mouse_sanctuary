@@ -28,6 +28,19 @@ def build_version():
         pass
     return 'unknown'
 
+def public_survival(payload):
+    # Display IDs are public; mapping provenance remains internal.
+    record_fields = ('perakakis_id', 'mouse_id', 'group', 'time', 'event', 'last_weight', 'last_day', 'baseline_weight')
+    roster_fields = ('perakakis_id', 'experiment', 'age_weeks', 'dpi', 'diet')
+    return {
+        'studies': [{'name': study['name'], 'records': [
+            {key: record[key] for key in record_fields if key in record}
+            for record in study.get('records', [])]} for study in payload.get('studies', [])],
+        'infection_roster': {'records': [
+            {key: record[key] for key in roster_fields if key in record}
+            for record in payload.get('infection_roster', {}).get('records', [])]},
+    }
+
 def fcs_allowed(user):
     # Explicit stable IDs; renaming an account never grants preview access.
     try: ids=json.loads((ROOT/'config/fcs_access.json').read_text()).get('user_ids',[])
@@ -73,7 +86,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.server.hosted and (path in ('/api/setup','/api/source/seed') or path.startswith('/api/fcs/')):
             raise Problem('Not available on this site.',404)
         if self.command=='GET' and not path.startswith('/api/'):
-            files={'/':'index.html','/app.js':'app.js','/i18n.js':'i18n.js','/study.js':'study.js','/chart.js':'chart.js','/style.css':'style.css','/fcs.js':'fcs.js','/strategies.js':'strategies.js','/tutorial.js':'tutorial.js','/mouse-cemetery.png':'mouse-cemetery.png'}
+            files={'/':'index.html','/app.js':'app.js','/i18n.js':'i18n.js','/study.js':'study.js','/chart.js':'chart.js','/style.css':'style.css','/fcs.js':'fcs.js','/strategies.js':'strategies.js','/tutorial.js':'tutorial.js','/survival.js':'survival.js','/mouse-cemetery.png':'mouse-cemetery.png'}
             if path not in files:raise Problem('Not found.',404)
             p=ROOT/'static'/files[path];return self.respond(200,p.read_bytes(),mimetypes.guess_type(p.name)[0]+('' if p.suffix=='.png' else '; charset=utf-8'))
         if self.command=='GET' and path=='/api/me':
@@ -130,6 +143,9 @@ class Handler(BaseHTTPRequestHandler):
                 finally:self.server.import_slot.release()
             d=self.body()
         if self.command=='GET':
+            if path=='/api/survival':
+                source=store.storage_path.parent/'survival'/'infection.json'
+                return self.respond(200,public_survival(json.loads(source.read_text()) if source.exists() else {'studies':[]}))
             if path=='/api/strategies':return self.respond(200,self.server.strategies.catalog(user,parse_qs(urlparse(self.path).query).get('review',['0'])[0]=='1'))
             if path.startswith('/api/strategies/'):
                 parts=path.split('/')

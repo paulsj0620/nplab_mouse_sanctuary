@@ -660,3 +660,56 @@ Removed the Data page's obsolete Original roster link to /api/source/seed, which
 - 렌즈는 최초 잡은 버튼 width+8px / height+4px를 드래그 내내 유지. 다른 긴 탭을 지나도 너비가 바뀌지 않는다. 6px 임계값, rect 거리 기반 후보 선택으로 여러 줄 nav 지원. 클릭 pill은 기존 260ms 이동 유지.
 - reduced motion 또는 reduced transparency이면 굴절·복제 글자 효과를 사용하지 않는다. languagechange/resize/cancel/Esc 시 드래그 정리. Observer가 렌즈 자식 SVG 변경을 다시 관찰해 loop하지 않도록 제외한다.
 - Chrome 검증: 렌즈 생성·드래그 중 비이동·놓은 후 이동·긴 탭 위 고정 폭·모션 감소/취소 및 오류 없음 확인, header 캡처 검토. 코드만 변경, 운영 배포/DB 변경 없음.
+
+### 2026-11-16 — Infection survival (H2/H3)
+- User confirmed: direct dark-red weight cells (FFC00000) mean death on that Day; no weight-threshold inference. Non-red mice are censored at last recorded measurement, including H2 CD HH1-02121–HH1-02125 at Day 10. H2/H3 are separate experiments, never pooled. Use Day headers, not inconsistent calendar-date notes.
+- Source: body weight for infection_by day.xlsx, H2/H3 rows 6–25. H2: CD10/death0, WD10/death6; H3: CD10/death1, WD10/death8. Prepared 40 records with complete numeric weight history, last/baseline weight, source row/cell, original filename/SHA256 and confirmed rules.
+- data/survival/infection.json and hash-named original XLSX copy are local non-Git data. Original SMB workbook unchanged; copy hash verified. Existing 183-mouse DB, users, exclusions and source uploads unchanged. Data requires separate authorized transfer to production; code deployment alone does not include it.
+- Graph comparison group now has Infection (not a global top navigation item). It displays an independent section with H2/H3 selector and only the selected experiment's CD/WD Kaplan–Meier curve. Existing comparison/export/settings controls are hidden in this mode; main Graph mouse selection/exclusions do not apply, stated in UI. Clicking original comparison tabs restores normal Graph.
+- static/survival.js: Kaplan–Meier event-before-censor ties, plus censor marks; same-time individuals listed together in hover/keyboard tooltip with last weight/day and baseline change. Individual outcomes and at-risk-before-Day tables, selected SVG and CSV exports. No ANOVA or significance test applied to survival.
+- /api/survival requires the existing session; reads dataset alongside the active DB, empty dataset if uninstalled. Added static route/deploy allowlist for survival.js; no data in static assets. Unauthenticated request confirmed 401.
+- Calculation tests passed (ties, censor-only, invalid input). Browser mock verified H2/H3 selection, 20 rows each, tooltip, selected SVG export and return to Graph without errors; screenshot reviewed. Development server responding 200. Production not deployed.
+
+- Survival hover fix: removed SVG native title from interactive markers to avoid simultaneous browser/default and custom tooltips. Retained aria-label and keyboard focus tooltip.
+
+### 2026-11-16 — Infection viewport fit and cursor
+- Survival markers use cursor:default instead of help. Removed hard-coded viewport-minus-290px/max-height-only sizing.
+- Fit SVG height from actual card document top, viewport height, measured export/summary controls and card padding, reserving 18px at bottom. Natural aspect-ratio height caps oversized charts; 220px minimum preserves usability on extremely short windows (page scrolling remains available). Refit on render, resize, header/toolbar resizing and Graph visibility.
+- Expanded individual/risk tables scroll internally up to 260px. Closed summaries plus export buttons remain in view at tested 1920×788, 950×788 and 1920×1080 viewports. Browser geometry and default-cursor assertions, H2/H3/tooltip/export regression passed. No data changes or production deploy.
+
+### 2026-11-16 — Infection click inspector (replaces hover)
+- Removed floating hover/focus tooltip. Markers now act as keyboard-accessible buttons (click/Enter/Space) with aria-pressed selection and a visible ring. Cursor remains default. Focus alone does not change selection.
+- Infection content uses full available width: minmax(0,1fr) graph + 340px information sidebar, gap 22px, top-aligned. Selected experiment/group/Day/survival/at-risk count and individual last weights remain visible after pointer leaves. Long details scroll inside sidebar, capped at fitted graph card height; ≤800px sidebar stacks below.
+- H2/H3 change clears selected point; language re-render retains matching selection. Export strips UI selection state and viewport-height styling. Original survival math and data unchanged.
+- Browser checks passed: no hover popup, click persistence, Enter selection (H2 WD Day9 gives 3 mice), aligned sidebar, card fit at 1920×788/950×788/1920×1080, H3 reset, SVG export and main Graph return. Screenshot inspected. Development only.
+
+### 2026-11-16 — Infection log-rank comparison
+- Each H2/H3 chart now displays its own CD vs WD unweighted log-rank p-value below the title, included in SVG export. This supersedes the earlier note that survival has no significance test. Chi-square reference distribution with 1 df; no multiple-testing adjustment, no pooling experiments. Tied deaths/censors remain in the risk set; hypergeometric variance handles tied deaths. Missing groups or zero variance show not estimable.
+- Unit tests cover ties, chi-square reference and uninformative data. Real local dataset cross-checked against R survival::survdiff: H2 chi-square 8.1947253873 / p 0.004201235; H3 10.5150715427 / p 0.001184048. Browser click inspector, exports and viewport fit regression passed.
+- Perakakis ID mapping is pending user clarification: source workbook only labels ID, Lab-ID and Käfig; Lab-ID repeats between cages. Do not relabel HH1 identifiers or infer a cross-ID without confirmation. Original workbook/data unchanged. Development code only; not deployed.
+
+### 2026-11-19 — Infection roster and Perakakis ID matching
+- Restarted com.mouselab.server; development root responds HTTP 200. No production changes.
+- Imported the supplied mouse info by number.xlsx Infection sheet (B2:C14): 13 Perakakis roster entries 209–221, separate experiment/age_weeks/dpi/diet fields. dpi means days post infection, not age. Preserved raw descriptions and source cells.
+- Explicit P-ID/Pyret-ID pairs from 20261111_ H2+H3 Exp(28w) organ weights.xlsx, Tabelle1, establish 13 candidate links. Validated uniqueness and experiment/group consistency against survival records and roster. IDs 209–220 (12 mice) matched; 221 / HH1-02155 is held for review: roster CD/12 dpi versus existing survival WD/death at 8 dpi. User clarification pending. Do not infer missing IDs by row order/cage/earmarks.
+- Local data/survival/infection.json retains mouse_id as original HH1 key, adds perakakis_id only for resolved records, id_match_status, source hash/row and conflict details. New roster/mapping metadata are separate from unchanged survival observations. Original XLSX copies and prior JSON snapshots are preserved under ignored data/survival; no research data committed. Main 183-mouse DB unchanged.
+- Graph point inspector displays resolved Perakakis IDs; absent/conflicted IDs explicitly retain HH1 with unavailable/review status. Outcome table and CSV keep source IDs and Perakakis IDs separately. Sidebar roster filters H2/H3 and shows match status; axis says Days post infection (dpi).
+- H2 roster 209 says 16 dpi while original last measured weight is 14 dpi; no inferred survival extension. All 40 original record fields, event times, weights and statistical results verified unchanged. Browser tested H2 ID209/H3 ID212, roster counts 1/12, conflict review, click persistence, viewport fit and exports. Five statistical tests pass.
+
+### 2026-11-19 — ID 221 conflict resolved
+- User explicitly confirmed Perakakis ID 221 / HH1-02155 as WD, 8 dpi. This supersedes the pending-review status above. Corrected local roster diet/dpi, marked alias matched and exposed Perakakis ID 221 in graph inspector/table/CSV. All 13 supplied roster IDs now matched; other 27 survival mice still have no supplied Perakakis mapping.
+- Preserved original workbook/description and JSON backup; correction provenance records old CD/12 dpi and user-confirmed WD/8 dpi. Survival death flag, time, weights and all other observations unchanged, hence KM/log-rank unchanged. Development data only; no production transfer or main DB change.
+
+### 2026-11-19 — Perakakis-only public identifiers
+- Removed Match column, status instructions and HH1/source ID from Infection UI and CSV. Unmapped records display Perakakis ID unavailable (미등록); all 40 survival observations remain included.
+- /api/survival now projects an explicit public field allowlist: no internal HH1 IDs, alias/provenance/conflict metadata or source fields sent to browsers. Local data retains complete originals and joins. This supersedes prior source-ID display/export guidance.
+- Verified public response retains 40 observations/13 roster entries/13 mapped IDs with no HH1 identifiers; browser checks passed for four-column roster, Perakakis inspector, hidden source IDs, viewport fit and exports. Restarted development service only.
+
+### 2026-11-19 — Hide individuals without Perakakis IDs
+- User requested hiding unavailable-ID entries. Filter individual outcomes, marker detail articles and individual CSV rows to records with Perakakis IDs; summary counts reflect visible individuals. Empty marker detail lists render only aggregate point information.
+- Kaplan–Meier, log-rank, graph cohort counts and at-risk tables continue to use every original observation. Do not infer that an unassigned ID has no survival measurements. Internal source records unchanged. Supersedes unavailable/미등록 placeholder guidance above.
+
+### 2026-11-19 — Restore HH identifiers as fallback (current rule)
+- User clarified animals lacking Perakakis IDs have not yet been collected; show their HH numbers. Supersedes Perakakis-only/hide-unmapped rules above.
+- Display Perakakis ID where mapped, otherwise source HH1 ID, across point inspector, individual table, sidebar Mouse roster and CSV. Both H2/H3 rosters now include all 20 animals, no Match column. Missing roster age is a dash; fallback dpi is existing survival endpoint, not an inferred collection day. Existing supplied roster metadata stays intact.
+- Public survival response includes mouse_id again, retaining an allowlist that omits mapping provenance. No source data or statistical calculations changed. Development service restarted.
