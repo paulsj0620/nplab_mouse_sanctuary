@@ -29,7 +29,10 @@ function logRank(records){
 function displayId(r){return r.perakakis_id?`Perakakis ID ${r.perakakis_id}`:r.mouse_id;}
 if(typeof module!=='undefined')module.exports={estimate,logRank,displayId};
 if(typeof document==='undefined')return;
-let payload=null,selectedStudy='H2',selectedPoint=null,requestId=0;const ko=()=>window.I18n?.language==='ko',t=(en,kr)=>ko()?kr:en;
+let payload=null,selectedStudy='H2',selectedPoint=null,requestId=0;
+let draftKey=null;
+function saveInfectionDraft(){if(!draftKey)return;try{localStorage.setItem(draftKey,JSON.stringify({schema:1,active:!dialog.hidden,study:selectedStudy,point:selectedPoint}));}catch{/* Storage unavailable: current work remains usable. */}}
+const ko=()=>window.I18n?.language==='ko',t=(en,kr)=>ko()?kr:en;
 const button=document.createElement('button');button.id='survival-open';button.type='button';button.textContent='Infection';button.setAttribute('aria-pressed','false');
 document.querySelector('.graph-selection-actions .import-tabs').append(button);
 const graphPage=document.querySelector('#graphs');const dialog=document.createElement('section');dialog.id='infection-view';dialog.hidden=true;dialog.setAttribute('aria-labelledby','survival-heading');dialog.setAttribute('data-no-translate','');graphPage.querySelector('.graph-toolbar').after(dialog);
@@ -75,7 +78,7 @@ new MutationObserver(scheduleFit).observe(graphPage,{attributes:true,attributeFi
 function render(){
  dialog.innerHTML=`<div class="infection-toolbar"><label>${t('Experiment','실험')}<select id="infection-experiment"><option value="H2">H2</option><option value="H3">H3</option></select></label><strong id="survival-heading">${esc(selectedStudy)} · Survival</strong></div><p>${t('H2 and H3 are separate infection experiments. Red cells = death; others censored at their last recorded Day. Main Graph selections and exclusions do not apply.','H2와 H3는 별개의 감염 실험입니다. 붉은 셀은 사망, 나머지는 마지막 기록일의 관찰 종료입니다. 기존 Graph의 선택·제외는 적용되지 않습니다.')}</p><div id="survival-content"></div>`;
  dialog.querySelector('#infection-experiment').value=selectedStudy;
- dialog.querySelector('#infection-experiment').onchange=e=>{selectedStudy=e.target.value;selectedPoint=null;render();dialog.querySelector('#infection-experiment').focus();};
+ dialog.querySelector('#infection-experiment').onchange=e=>{selectedStudy=e.target.value;selectedPoint=null;saveInfectionDraft();render();dialog.querySelector('#infection-experiment').focus();};
  const content=dialog.querySelector('#survival-content');if(!payload){content.textContent=t('Loading…','불러오는 중…');return;}
  if(!payload.studies?.length){content.textContent=t('No survival dataset has been installed on this server.','이 서버에는 생존 데이터가 등록되지 않았습니다.');return;}
  const studies=payload.studies.filter(s=>s.name===selectedStudy);
@@ -88,7 +91,7 @@ function render(){
  if(roster.length)content.querySelector('.survival-inspector').insertAdjacentHTML('beforeend',`<details class="infection-roster" open><summary>${t('Mouse roster','마우스 명단')} (${roster.length})</summary><p>${t('dpi = days post infection; weeks = age.','dpi = 감염 후 경과일, weeks = 주령입니다.')}</p><div class="table-scroll"><table><thead><tr><th>Mouse ID</th><th>Diet</th><th>Weeks</th><th>dpi</th></tr></thead><tbody>${roster.map(r=>`<tr><td>${esc(r.perakakis_id||r.mouse_id)}</td><td>${esc(r.diet)}</td><td>${esc(r.age_weeks)}</td><td>${esc(r.dpi)}</td></tr>`).join('')}</tbody></table></div></details>`);
  const info=dialog.querySelector('#survival-point-info');
  function selectPoint(el){
-  selectedPoint={group:el.dataset.group,day:el.dataset.day};
+  selectedPoint={group:el.dataset.group,day:el.dataset.day};saveInfectionDraft();
   content.querySelectorAll('[data-tip]').forEach(point=>point.setAttribute('aria-pressed',String(point===el)));
   const blocks=el.dataset.tip.split('\n\n');
   info.innerHTML=`<div class="survival-point-overview"><strong>${esc(selectedStudy)} · ${esc(el.dataset.group)}</strong><p>${esc(blocks[0])}</p></div>`+blocks.slice(1).filter(block=>block.trim()).map(block=>`<article class="survival-mouse-info"><strong>${esc(block.split('\n')[0])}</strong><p>${esc(block.split('\n').slice(1).join('\n'))}</p></article>`).join('');
@@ -96,7 +99,20 @@ function render(){
  }
  content.querySelectorAll('[data-tip]').forEach(el=>{el.onclick=()=>selectPoint(el);el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectPoint(el);}};if(selectedPoint&&el.dataset.group===selectedPoint.group&&el.dataset.day===selectedPoint.day)selectPoint(el);});scheduleFit();
 }
-button.onclick=async()=>{const id=++requestId;payload=null;graphPage.classList.add('infection-mode');dialog.hidden=false;button.setAttribute('aria-pressed','true');document.querySelectorAll('[data-study]').forEach(b=>b.setAttribute('aria-pressed','false'));render();try{const response=await fetch('/api/survival');if(!response.ok)throw Error(t('Sign in to view survival data.','생존 데이터를 보려면 로그인해주세요.'));const result=await response.json();if(id!==requestId)return;payload=result;render();}catch(e){if(id===requestId)dialog.querySelector('#survival-content').textContent=e.message;}};
-document.querySelectorAll('[data-study]').forEach(b=>b.addEventListener('click',()=>{requestId++;graphPage.classList.remove('infection-mode');dialog.hidden=true;button.setAttribute('aria-pressed','false');}));
+button.onclick=async()=>{const id=++requestId;payload=null;graphPage.classList.add('infection-mode');dialog.hidden=false;saveInfectionDraft();button.setAttribute('aria-pressed','true');document.querySelectorAll('[data-study]').forEach(b=>b.setAttribute('aria-pressed','false'));render();try{const response=await fetch('/api/survival');if(!response.ok)throw Error(t('Sign in to view survival data.','생존 데이터를 보려면 로그인해주세요.'));const result=await response.json();if(id!==requestId)return;payload=result;render();}catch(e){if(id===requestId)dialog.querySelector('#survival-content').textContent=e.message;}};
+document.querySelectorAll('[data-study]').forEach(b=>b.addEventListener('click',()=>{requestId++;graphPage.classList.remove('infection-mode');dialog.hidden=true;saveInfectionDraft();button.setAttribute('aria-pressed','false');}));
+document.addEventListener('workspace-session-ready',event=>{
+ requestId++;payload=null;selectedStudy='H2';selectedPoint=null;
+ graphPage.classList.remove('infection-mode');dialog.hidden=true;button.setAttribute('aria-pressed','false');
+ draftKey=event.detail?.userId!=null?'mouse-sanctuary-graph-v1-'+event.detail.userId+'-infection':null;
+ if(!draftKey)return;
+ try{
+  const draft=JSON.parse(localStorage.getItem(draftKey)||'null');
+  if(draft?.schema!==1)return;
+  if(['H2','H3'].includes(draft.study))selectedStudy=draft.study;
+  if(['CD','WD'].includes(draft.point?.group)&&/^\d+(?:\.\d+)?$/.test(String(draft.point.day)))selectedPoint={group:draft.point.group,day:String(draft.point.day)};
+  if(draft.active===true)button.click();
+ }catch{/* Ignore malformed browser drafts. */}
+});
 document.addEventListener('languagechange',()=>{if(!dialog.hidden)render();});
 })(typeof window!=='undefined'?window:globalThis);

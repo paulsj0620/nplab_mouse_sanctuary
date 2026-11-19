@@ -371,6 +371,7 @@ async function loadSession(){const state=await api('/me');runningBuild=state.bui
  const button=[...document.querySelectorAll('[data-page]')].find(b=>b.dataset.page===page);
  button?.click();
  $('#workspace').hidden=false;
+ document.dispatchEvent(new CustomEvent('workspace-session-ready',{detail:{userId:user.id}}));
 }
 $('#guest-start').onclick=()=>{
  guestSession(true);guest=true;example=true;user=null;data=demo;sampleChanges.clear();

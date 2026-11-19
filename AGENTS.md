@@ -713,3 +713,13 @@ Removed the Data page's obsolete Original roster link to /api/source/seed, which
 - User clarified animals lacking Perakakis IDs have not yet been collected; show their HH numbers. Supersedes Perakakis-only/hide-unmapped rules above.
 - Display Perakakis ID where mapped, otherwise source HH1 ID, across point inspector, individual table, sidebar Mouse roster and CSV. Both H2/H3 rosters now include all 20 animals, no Match column. Missing roster age is a dash; fallback dpi is existing survival endpoint, not an inferred collection day. Existing supplied roster metadata stays intact.
 - Public survival response includes mouse_id again, retaining an allowlist that omits mapping provenance. No source data or statistical calculations changed. Development service restarted.
+
+### 2026-11-19 — Infection data transferred to production directly
+- At user request, transferred data via SSH/SCP using existing deployment key, without GitHub or code deployment. Destination /home/nplab/mouse-sanctuary/data/survival. Previously no production infection.json existed; installed atomically after validating staged contents.
+- Published current infection.json (H2/H3 20 each; 13 Perakakis aliases including confirmed 221 WD/8 dpi), plus three SHA256-named original workbooks and transfer manifest. All four source/published hashes verified. Original production DB/accounts untouched; existing production UI already supports HH fallback and full roster.
+- Production root responds 200; unauthenticated /api/survival remains 401. Source workbooks and correction history retained; no Git data additions.
+
+### 2026-11-19 — Resume Infection after refresh
+- Infection now saves active comparison mode, H2/H3 and selected point (group/dpi) in account-ID-scoped localStorage. app.js emits workspace-session-ready only after authentication, state load and main-page restoration; survival.js then validates/restores its own draft. Main Graph state is preserved independently.
+- Key uses mouse-sanctuary-graph-v1-{userId}-infection so existing account draft-clear/logout removes it. Missing/malformed or unavailable storage does not break the workspace. No measurements or IDs stored in this draft, only UI selection.
+- Selecting an ordinary comparison saves Infection inactive. Browser verified H3/WD 8 dpi selection survives reload, inspector restores Perakakis ID221, and selecting All experiments stays out of Infection after the next reload. Existing viewport/interaction/export regression passed. Development code only, no production deployment.
