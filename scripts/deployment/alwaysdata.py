@@ -18,6 +18,15 @@ import zipfile
 SSH = "nplab@ssh-nplab.alwaysdata.net"
 FILES = (
     "build.json",
+    "static/portal/app.js",
+    "static/portal/bridge.js",
+    "static/portal/frame.css",
+    "static/portal/index.html",
+    "static/portal/omics.png",
+    "static/portal/portal.png",
+    "static/portal/singlecell.png",
+    "static/portal/style.css",
+
     "scripts/__init__.py", "scripts/paths.py", "scripts/app/__init__.py",
     "scripts/app/server.py", "scripts/app/service.py", "scripts/app/security.py", "scripts/app/experiments.py", "scripts/app/strategies.py",
     "scripts/imports/__init__.py", "scripts/imports/facs.py", "scripts/imports/histology.py",

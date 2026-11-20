@@ -1,0 +1,11 @@
+/* Native tool handlers remain in the app; Portal shows their controls in its header. */
+html { scrollbar-gutter: stable; }
+body { min-width: 0 !important; }
+#workspace > header,
+.omics-header,
+header.top,
+.language-bar,
+.omics-language-bar,
+.language-footer { display: none !important; }
+html[data-portal-platform="singlecell"] .container-fluid { padding: 0; }
+html[data-portal-platform="singlecell"] main { padding-bottom: 18px !important; }

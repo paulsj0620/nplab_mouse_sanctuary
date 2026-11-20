@@ -13,6 +13,25 @@ from scripts.app.security import LoginLimiter, client_ip
 
 ROOT=PROJECT_ROOT
 
+PORTAL_FILES = {
+    '/': 'portal/index.html',
+    '/hub/style.css': 'portal/style.css',
+    '/hub/app.js': 'portal/app.js',
+    '/hub/bridge.js': 'portal/bridge.js',
+    '/hub/frame.css': 'portal/frame.css',
+    '/hub/icons/mouse.png': 'mouse-cemetery.png',
+    **{f'/hub/icons/{name}.png': f'portal/{name}.png'
+       for name in ('portal', 'omics', 'singlecell')},
+}
+
+def portal_language(store, user_id, language=None):
+    with sqlite3.connect(store.storage_path.parent / 'portal-preferences.sqlite') as db:
+        db.execute('CREATE TABLE IF NOT EXISTS preferences (user_id INTEGER PRIMARY KEY, language TEXT NOT NULL)')
+        if language is not None:
+            db.execute('INSERT OR REPLACE INTO preferences VALUES (?,?)', (user_id, language))
+        row = db.execute('SELECT language FROM preferences WHERE user_id=?', (user_id,)).fetchone()
+    return {'language': row[0] if row else 'en', 'saved': row is not None}
+
 def build_version():
     try:
         if (ROOT/'build.json').is_file():
@@ -55,11 +74,12 @@ def visible_audit(rows,user):
 
 class Handler(BaseHTTPRequestHandler):
     def log_message(self,fmt,*args): pass
-    def respond(self,status,data,ctype='application/json; charset=utf-8',cookie=None,download=None):
+    def respond(self,status,data,ctype='application/json; charset=utf-8',cookie=None,download=None,embed_mouse=False):
         body=dump(data).encode() if ctype.startswith('application/json') else data
         self.send_response(status);self.send_header('Content-Type',ctype);self.send_header('Content-Length',str(len(body)))
         self.send_header('Cache-Control','no-store');self.send_header('X-Content-Type-Options','nosniff');self.send_header('Referrer-Policy','same-origin')
-        self.send_header('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'")
+        ancestor = "'self'" if embed_mouse else "'none'"
+        self.send_header('Content-Security-Policy',f"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; frame-ancestors {ancestor}; base-uri 'none'")
         if self.server.hosted:self.send_header('Strict-Transport-Security','max-age=31536000')
         if status==429:self.send_header('Retry-After','300')
         if cookie:self.send_header('Set-Cookie',cookie)
@@ -85,6 +105,27 @@ class Handler(BaseHTTPRequestHandler):
         store=self.server.store;path=unquote(urlparse(self.path).path)
         if self.server.hosted and (path in ('/api/setup','/api/source/seed') or path.startswith('/api/fcs/')):
             raise Problem('Not available on this site.',404)
+        if self.server.hosted:
+            if self.command == 'GET' and path == '/hub/session':
+                user = store.session(self.token())
+                return self.respond(200, {'user': public_user(user), **portal_language(store, user['id'])})
+            if self.command == 'POST' and path == '/hub/preferences':
+                user = store.session(self.token())
+                if not secrets.compare_digest(self.headers.get('X-CSRF-Token',''), user['csrf']):
+                    raise Problem('Refresh the page to renew request authentication.',403)
+                language = self.body().get('language')
+                if language not in ('en','ko'):
+                    raise Problem('Unsupported language.')
+                return self.respond(200, portal_language(store, user['id'], language))
+            if self.command == 'GET' and path == '/mouse/':
+                store.session(self.token())
+                page = (ROOT / 'static/index.html').read_text()
+                assets = '<script src="/hub/bridge.js"></script><link rel="stylesheet" href="/hub/frame.css">'
+                return self.respond(200, page.replace('<head>', '<head>' + assets, 1).encode(),
+                                    'text/html; charset=utf-8', embed_mouse=True)
+            if self.command == 'GET' and path in PORTAL_FILES:
+                asset = ROOT / 'static' / PORTAL_FILES[path]
+                return self.respond(200, asset.read_bytes(), mimetypes.guess_type(asset.name)[0])
         if self.command=='GET' and not path.startswith('/api/'):
             files={'/':'index.html','/app.js':'app.js','/i18n.js':'i18n.js','/study.js':'study.js','/chart.js':'chart.js','/style.css':'style.css','/fcs.js':'fcs.js','/strategies.js':'strategies.js','/tutorial.js':'tutorial.js','/survival.js':'survival.js','/mouse-cemetery.png':'mouse-cemetery.png'}
             if path not in files:raise Problem('Not found.',404)

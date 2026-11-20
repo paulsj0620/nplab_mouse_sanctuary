@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f8f9fa">
+  <title>NPLab Portal</title>
+  <link rel="stylesheet" href="/hub/style.css?v=8">
+  <script src="/hub/app.js?v=5" defer></script>
+</head>
+<body>
+  <p id="session-loading" role="status" data-en="Loading workspace…" data-ko="작업 공간을 불러오는 중…">Loading workspace…</p>
+  <section id="auth" hidden>
+    <div class="authbox">
+      <h1 class="brand"><img src="/hub/icons/portal.png" alt="" width="44" height="44"><span>NPLab Portal</span></h1>
+      <p data-en="Sign in with your lab account." data-ko="연구실 계정으로 로그인하세요.">Sign in with your lab account.</p>
+      <form id="login">
+        <label><span data-en="Username" data-ko="사용자 이름">Username</span><input id="username" autocomplete="username" required></label>
+        <label><span data-en="Password" data-ko="비밀번호">Password</span><input id="password" type="password" autocomplete="current-password" required minlength="12"></label>
+        <button class="primary" id="login-button" type="submit" data-en="Sign in" data-ko="로그인">Sign in</button>
+        <p id="auth-error" role="alert"></p>
+      </form>
+      <div id="auth-language-slot">
+  <div class="language-bar" id="language-control">
+    <label for="language-select">Language / 언어</label>
+    <select id="language-select"><option value="en">English</option><option value="ko">한국어</option></select>
+    <span id="language-status" role="status"></span>
+  </div>
+      </div>
+    </div>
+  </section>
+  <div id="workspace" hidden>
+    <header class="workspace-header">
+      <div class="brand" id="platform-brand">
+        <img id="platform-icon" src="/hub/icons/portal.png" alt="" width="44" height="44">
+        <span id="platform-title">NPLab Portal</span>
+      </div>
+      <nav id="native-nav" aria-label="Platform tools" hidden></nav>
+      <div class="account">
+        <details id="platform-menu" class="platform-menu">
+          <summary data-en="Menu" data-ko="메뉴">Menu</summary>
+          <nav id="platform-nav" aria-label="Platforms">
+            <a href="/?platform=home" data-platform="home"><img src="/hub/icons/portal.png" alt="" width="24" height="24"><span data-en="Home" data-ko="홈">Home</span></a>
+            <a href="/?platform=mouse" data-platform="mouse"><img src="/hub/icons/mouse.png" alt="" width="24" height="24">Mouse Sanctuary</a>
+            <a href="/?platform=omics" data-platform="omics"><img src="/hub/icons/omics.png" alt="" width="24" height="24">Omics Explorer</a>
+            <a href="/?platform=singlecell" data-platform="singlecell"><img src="/hub/icons/singlecell.png" alt="" width="24" height="24">Single Cell Explorer</a>
+            <div id="menu-language-slot"></div>
+          </nav>
+        </details>
+        <span id="account"></span>
+        <button id="help" type="button" data-en="Help" data-ko="도움말">Help</button>
+        <button id="my-account" type="button" data-en="My account" data-ko="내 계정">My account</button>
+        <button id="refresh" type="button" data-en="Refresh" data-ko="새로고침">Refresh</button>
+        <button id="logout" type="button" data-en="Sign out" data-ko="로그아웃">Sign out</button>
+      </div>
+    </header>
+    <main id="home">
+      <h1 class="sr-only">NPLab Portal</h1>
+      <section class="home-grid" aria-label="Platforms">
+        <a class="home-card" href="/?platform=mouse" data-platform="mouse">
+          <img class="platform-art" src="/hub/icons/mouse.png" alt="" width="132" height="132">
+          <span><span class="card-title">Mouse Sanctuary</span><span class="card-description" data-en="Manage mouse experiments and compare group results." data-ko="마우스 실험 데이터를 관리하고 그룹별 결과를 비교합니다.">Manage mouse experiments and compare group results.</span></span><span class="card-arrow" aria-hidden="true">→</span>
+        </a>
+        <a class="home-card" href="/?platform=omics" data-platform="omics">
+          <img class="platform-art" src="/hub/icons/omics.png" alt="" width="132" height="132">
+          <span><span class="card-title">Omics Explorer</span><span class="card-description" data-en="Explore RNA-seq and microbiome analysis reports." data-ko="RNA-seq 및 미생물 분석 결과를 탐색합니다.">Explore RNA-seq and microbiome analysis reports.</span></span><span class="card-arrow" aria-hidden="true">→</span>
+        </a>
+        <a class="home-card" href="/?platform=singlecell" data-platform="singlecell">
+          <img class="platform-art" src="/hub/icons/singlecell.png" alt="" width="132" height="132">
+          <span><span class="card-title">Single Cell Explorer</span><span class="card-description" data-en="Explore cell types, UMAP and differential expression." data-ko="세포 유형과 UMAP을 탐색하고 DE · Pathway 분석을 진행합니다.">Explore cell types, UMAP and differential expression.</span></span><span class="card-arrow" aria-hidden="true">→</span>
+        </a>
+      </section>
+    </main>
+    <iframe id="platform-frame" title="Platform workspace" hidden></iframe>
+  </div>
+  <p id="portal-error" role="alert" hidden></p>
+
+  <dialog id="unavailable" aria-labelledby="unavailable-platform" aria-describedby="unavailable-message">
+    <h2 id="unavailable-platform"></h2>
+    <p id="unavailable-message" data-en="This platform is currently unavailable." data-ko="지금은 사용할 수 없습니다.">This platform is currently unavailable.</p>
+    <form method="dialog"><button data-en="Close" data-ko="닫기">Close</button></form>
+  </dialog>
+  <dialog id="help-dialog">
+    <div class="dialog-top"><h2 data-en="NPLab Portal" data-ko="NPLab Portal">NPLab Portal</h2><form method="dialog"><button data-en="Close" data-ko="닫기">Close</button></form></div>
+    <p data-en="Select a platform from Menu or a Home card. Use the tools beside the platform title. My account opens your Mouse Sanctuary account settings. Language and access follow your lab account." data-ko="메뉴 또는 홈 카드에서 플랫폼을 선택하고, 제목 오른쪽에서 플랫폼 도구를 선택하세요. 내 계정에서는 Mouse Sanctuary 계정을 관리합니다. 언어와 접근 권한은 연구실 계정을 따릅니다."></p>
+  </dialog>
+</body>
+</html>
