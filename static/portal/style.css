@@ -58,8 +58,7 @@ a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visibl
   -webkit-backdrop-filter: blur(28px) saturate(130%);
 }
 .brand { display: flex; gap: 10px; align-items: center; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -.4px; }
-.brand img { flex-shrink: 0; object-fit: contain; }
-.brand img[src="/hub/icons/portal.png"] { width: 60px; height: 60px; transform: scale(1.2); }
+.brand img { width: 60px; height: 60px; flex-shrink: 0; object-fit: contain; transform: scale(1.2); }
 #native-nav {
   display: flex;
   flex-wrap: wrap;
